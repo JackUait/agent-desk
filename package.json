@@ -1,0 +1,13 @@
+{
+  "name": "agent-desk",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && yarn dev",
+    "dev:backend": "cd backend && go run ./cmd/server",
+    "test:frontend": "cd frontend && yarn test",
+    "test:backend": "cd backend && go test ./...",
+    "test": "npm run test:frontend && npm run test:backend",
+    "lint": "cd frontend && yarn lint"
+  }
+}
