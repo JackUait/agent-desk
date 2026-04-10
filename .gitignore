@@ -21,6 +21,7 @@ Thumbs.db
 
 # Go
 backend/tmp/
+backend/server
 
 # Playwright
 frontend/test-results/
