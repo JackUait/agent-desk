@@ -1,10 +1,14 @@
 package conversation
 
-import "context"
+import (
+	"context"
+
+	"github.com/jackuait/agent-desk/backend/internal/domain"
+)
 
 type Service interface {
 	GetConversation(ctx context.Context, id string) (Conversation, error)
 	ListConversations(ctx context.Context) ([]Conversation, error)
 	CreateConversation(ctx context.Context, cardID string) (Conversation, error)
-	SendMessage(ctx context.Context, conversationID, content string) (Message, error)
+	SendMessage(ctx context.Context, conversationID, content string) (domain.Message, error)
 }

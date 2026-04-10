@@ -1,15 +1,12 @@
 package agent
 
-import "context"
+import (
+	"context"
 
-type Message struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
-}
+	"github.com/jackuait/agent-desk/backend/internal/domain"
+)
 
 type Provider interface {
-	SendMessage(ctx context.Context, conversationID string, content string) (Message, error)
+	SendMessage(ctx context.Context, conversationID string, content string) (domain.Message, error)
 	StreamResponse(ctx context.Context, conversationID string, content string) (<-chan string, error)
 }

@@ -3,25 +3,26 @@ package conversation
 import (
 	"net/http"
 
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 )
 
 func HandleGetConversation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
-		httputil.JSON(w, http.StatusOK, Conversation{ID: id, Messages: []Message{}})
+		httputil.JSON(w, http.StatusOK, Conversation{ID: id, Messages: []domain.Message{}})
 	})
 }
 
 func HandleCreateConversation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		httputil.JSON(w, http.StatusCreated, Conversation{ID: "new", Messages: []Message{}})
+		httputil.JSON(w, http.StatusCreated, Conversation{ID: "new", Messages: []domain.Message{}})
 	})
 }
 
 func HandleAddMessage() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		httputil.JSON(w, http.StatusCreated, Message{ID: "msg-1", Role: "user", Content: ""})
+		httputil.JSON(w, http.StatusCreated, domain.Message{ID: "msg-1", Role: "user", Content: ""})
 	})
 }
 

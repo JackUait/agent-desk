@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
-// Compile-time check that the interface is implementable.
 type mockProvider struct{}
 
-func (m *mockProvider) SendMessage(_ context.Context, _ string, _ string) (agent.Message, error) {
-	return agent.Message{}, nil
+func (m *mockProvider) SendMessage(_ context.Context, _ string, _ string) (domain.Message, error) {
+	return domain.Message{}, nil
 }
 
 func (m *mockProvider) StreamResponse(_ context.Context, _ string, _ string) (<-chan string, error) {
