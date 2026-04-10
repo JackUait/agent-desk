@@ -13,7 +13,9 @@ export interface Column {
 export interface Card {
   id: string;
   title: string;
+  description: string;
   status: string;
+  agentName: string;
   messages: Message[];
 }
 
