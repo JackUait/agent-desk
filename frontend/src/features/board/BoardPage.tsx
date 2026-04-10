@@ -7,7 +7,6 @@ export function BoardPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.grain} />
       <header className={styles.header}>
         <h1 className={styles.title}>Agent Desk</h1>
         <p className={styles.subtitle}>Live agent operations</p>

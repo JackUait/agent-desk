@@ -1,26 +1,32 @@
 :root {
-  /* — palette — */
-  --bg-deep: #08080c;
-  --bg-surface: #111118;
-  --bg-card: #15151e;
-  --bg-card-hover: #1c1c28;
-  --bg-count: rgba(255, 255, 255, 0.05);
+  /* — backgrounds — */
+  --bg-deep: #f5f2ec;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #faf8f4;
+  --bg-count: rgba(0, 0, 0, 0.04);
 
-  --border-subtle: #1e1e2a;
-  --border-hover: #2e2e3e;
+  /* — borders — */
+  --border-subtle: #e8e3da;
+  --border-dashed: #d5d0c6;
+  --border-hover: #ccc7bd;
 
-  --text-primary: #e4e2dc;
-  --text-secondary: #8a8895;
-  --text-muted: #55536a;
+  /* — text — */
+  --text-primary: #2c2925;
+  --text-secondary: #6b655c;
+  --text-muted: #a39e95;
 
-  --accent-amber: #d4a04a;
-  --accent-amber-dim: rgba(212, 160, 74, 0.35);
-  --accent-amber-glow: rgba(212, 160, 74, 0.1);
+  /* — accent — */
+  --accent-amber: #e67e22;
+  --accent-amber-dim: rgba(230, 126, 34, 0.15);
+  --accent-amber-glow: rgba(230, 126, 34, 0.12);
+
+  /* — status — */
+  --status-done: #34a853;
 
   /* — fonts — */
-  --font-display: "Instrument Serif", Georgia, serif;
-  --font-body: "DM Sans", system-ui, sans-serif;
-  --font-mono: "Fira Code", "Courier New", monospace;
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-body: "Outfit", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Courier New", monospace;
 }
 
 *,

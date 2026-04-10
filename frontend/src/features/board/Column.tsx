@@ -16,6 +16,14 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
       <div className={styles.header}>
         <h2 className={styles.title}>{column.title}</h2>
         <span className={styles.count}>{column.cardIds.length}</span>
+        <div className={styles.actions}>
+          <button className={styles.actionBtn} type="button" aria-label="Refresh">
+            ↻
+          </button>
+          <button className={styles.actionBtn} type="button" aria-label="More options">
+            ⋯
+          </button>
+        </div>
       </div>
       <div className={styles.cardList}>
         {column.cardIds.map((cardId) => {
@@ -25,6 +33,7 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
             <KanbanCard
               key={cardId}
               card={card}
+              columnId={column.id}
               isEntering={enteringCards?.has(cardId)}
               isExiting={exitingCards?.has(cardId)}
               isWorking={workingCards?.has(cardId)}
@@ -32,6 +41,10 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
           );
         })}
       </div>
+      <button className={styles.addTask} type="button">
+        <span className={styles.addIcon}>+</span>
+        Add Task
+      </button>
     </section>
   );
 }

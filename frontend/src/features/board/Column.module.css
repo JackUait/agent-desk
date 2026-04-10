@@ -1,29 +1,24 @@
 .column {
   flex: 1 1 0;
   min-width: 260px;
-  max-width: 340px;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 14px;
+  padding: 0 2px 16px;
+  gap: 8px;
 }
 
 .title {
   font-family: var(--font-display);
   font-size: 0.95rem;
-  font-weight: 400;
-  color: var(--text-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
-  letter-spacing: 0.02em;
-  font-style: italic;
 }
 
 .count {
@@ -33,13 +28,70 @@
   background: var(--bg-count);
   padding: 2px 8px;
   border-radius: 10px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.actionBtn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  transition: background-color 0.15s, color 0.15s;
+  padding: 0;
+  font-family: var(--font-body);
+}
+
+.actionBtn:hover {
+  background: var(--bg-count);
+  color: var(--text-secondary);
 }
 
 .cardList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
   min-height: 80px;
+}
+
+.addTask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  margin-top: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.addTask:hover {
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.addIcon {
+  font-size: 1rem;
+  line-height: 1;
 }
