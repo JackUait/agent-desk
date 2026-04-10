@@ -1,14 +1,14 @@
 import type { Card } from "../../shared/types/domain";
 import styles from "./KanbanCard.module.css";
 
-const AVATAR_COLORS = ["#e67e22", "#3498db", "#9b59b6", "#1abc9c", "#e74c3c", "#2ecc71"];
+const AVATAR_COLORS = ["#527a9a", "#6b8e5e", "#9b7e5e", "#8b6b87", "#5e8e8b", "#7a6b9b"];
 const TAG_PALETTE = [
-  { backgroundColor: "#dbeafe", color: "#1d4ed8" },
-  { backgroundColor: "#f3e8ff", color: "#7c3aed" },
-  { backgroundColor: "#fce7f3", color: "#be185d" },
-  { backgroundColor: "#d1fae5", color: "#047857" },
-  { backgroundColor: "#fef3c7", color: "#b45309" },
-  { backgroundColor: "#e0f2fe", color: "#0369a1" },
+  { backgroundColor: "#d3e5ef", color: "#28456c" },
+  { backgroundColor: "#e8deee", color: "#492f64" },
+  { backgroundColor: "#f5e0e9", color: "#69314c" },
+  { backgroundColor: "#dbeddb", color: "#2b593f" },
+  { backgroundColor: "#fadec9", color: "#854c1d" },
+  { backgroundColor: "#fdecc8", color: "#764b00" },
 ];
 
 function hashStr(s: string): number {

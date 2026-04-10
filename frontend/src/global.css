@@ -1,32 +1,35 @@
 :root {
   /* — backgrounds — */
-  --bg-deep: #f5f2ec;
+  --bg-deep: #f7f6f3;
   --bg-surface: #ffffff;
-  --bg-surface-alt: #faf8f4;
-  --bg-count: rgba(0, 0, 0, 0.04);
+  --bg-surface-alt: #f7f6f3;
+  --bg-hover: rgba(55, 53, 47, 0.04);
+  --bg-count: rgba(55, 53, 47, 0.06);
 
   /* — borders — */
-  --border-subtle: #e8e3da;
-  --border-dashed: #d5d0c6;
-  --border-hover: #ccc7bd;
+  --border-subtle: rgba(55, 53, 47, 0.09);
+  --border-dashed: rgba(55, 53, 47, 0.09);
+  --border-hover: rgba(55, 53, 47, 0.16);
 
   /* — text — */
-  --text-primary: #2c2925;
-  --text-secondary: #6b655c;
-  --text-muted: #a39e95;
+  --text-primary: #37352f;
+  --text-secondary: #787774;
+  --text-muted: #9b9a97;
 
   /* — accent — */
+  --accent-blue: #2383e2;
+  --accent-blue-dim: rgba(35, 131, 226, 0.08);
   --accent-amber: #e67e22;
   --accent-amber-dim: rgba(230, 126, 34, 0.15);
   --accent-amber-glow: rgba(230, 126, 34, 0.12);
 
   /* — status — */
-  --status-done: #34a853;
+  --status-done: #2eaadc;
 
   /* — fonts — */
-  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
-  --font-body: "Outfit", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+  --font-display: "DM Sans", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Courier New", monospace;
 }
 
 *,

@@ -9,26 +9,24 @@
 .header {
   display: flex;
   align-items: center;
-  padding: 0 2px 16px;
-  gap: 8px;
+  padding: 0 4px 12px;
+  gap: 6px;
 }
 
 .title {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .count {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   color: var(--text-muted);
-  background: var(--bg-count);
-  padding: 2px 8px;
-  border-radius: 10px;
-  letter-spacing: 0.02em;
   font-weight: 500;
 }
 
@@ -36,62 +34,68 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.column:hover .actions {
+  opacity: 1;
 }
 
 .actionBtn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: none;
-  border-radius: 50%;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.85rem;
-  transition: background-color 0.15s, color 0.15s;
+  font-size: 0.8rem;
+  transition: background-color 0.12s, color 0.12s;
   padding: 0;
   font-family: var(--font-body);
 }
 
 .actionBtn:hover {
-  background: var(--bg-count);
+  background: var(--bg-hover);
   color: var(--text-secondary);
 }
 
 .cardList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   flex: 1;
-  min-height: 80px;
+  min-height: 60px;
 }
 
 .addTask {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 8px;
-  margin-top: 8px;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--text-muted);
   font-family: var(--font-body);
-  font-size: 0.8rem;
-  font-weight: 500;
-  border-radius: 8px;
-  transition: color 0.15s, background-color 0.15s;
+  font-size: 0.78rem;
+  font-weight: 400;
+  border-radius: 4px;
+  transition: background-color 0.12s, color 0.12s;
 }
 
 .addTask:hover {
   color: var(--text-secondary);
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--bg-hover);
 }
 
 .addIcon {
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
