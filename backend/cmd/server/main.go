@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/board"
-	"github.com/jackuait/agent-desk/backend/internal/conversation"
+	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/pkg/middleware"
 )
 
 func main() {
@@ -21,12 +22,17 @@ func main() {
 		w.Write([]byte("ok\n"))
 	})
 
-	board.RegisterRoutes(mux)
-	conversation.RegisterRoutes(mux)
+	cardStore := card.NewStore()
+	cardSvc := card.NewService(cardStore)
+	cardHandler := card.NewHandler(cardSvc)
+	cardHandler.RegisterRoutes(mux)
+
+	boardHandler := board.NewHandler(cardStore)
+	boardHandler.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:         ":8080",
-		Handler:      mux,
+		Handler:      middleware.CORS(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
