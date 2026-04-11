@@ -2,41 +2,35 @@
   flex: 1 1 0;
   min-width: 260px;
   max-width: 320px;
-  display: flex;
-  flex-direction: column;
 }
 
 .header {
   display: flex;
   align-items: center;
-  padding: 0 4px 12px;
   gap: 6px;
+  padding: 0 2px 8px;
 }
 
 .title {
-  font-family: var(--font-body);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-secondary);
-  margin: 0;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  margin: 0;
 }
 
 .count {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 12px;
   color: var(--text-muted);
-  font-weight: 500;
 }
 
 .actions {
   margin-left: auto;
   display: flex;
-  align-items: center;
   gap: 0;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.12s;
 }
 
 .column:hover .actions {
@@ -49,15 +43,12 @@
   border: none;
   background: none;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.8rem;
-  transition: background-color 0.12s, color 0.12s;
+  font-size: 13px;
   padding: 0;
-  font-family: var(--font-body);
 }
 
 .actionBtn:hover {
@@ -68,26 +59,22 @@
 .cardList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  min-height: 60px;
+  gap: 8px;
+  min-height: 48px;
 }
 
 .addTask {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 6px 8px;
   margin-top: 4px;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 400;
+  font-size: 13px;
   border-radius: 4px;
-  transition: background-color 0.12s, color 0.12s;
 }
 
 .addTask:hover {
@@ -96,6 +83,6 @@
 }
 
 .addIcon {
-  font-size: 0.9rem;
+  font-size: 14px;
   line-height: 1;
 }
