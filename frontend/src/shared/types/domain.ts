@@ -10,13 +10,21 @@ export interface Column {
   cardIds: string[];
 }
 
+export type CardColumn = "backlog" | "in_progress" | "review" | "done";
+
 export interface Card {
   id: string;
   title: string;
   description: string;
-  status: string;
-  agentName: string;
-  messages: Message[];
+  column: CardColumn;
+  acceptanceCriteria: string[];
+  complexity: string;
+  relevantFiles: string[];
+  sessionId: string;
+  worktreePath: string;
+  branchName: string;
+  prUrl: string;
+  createdAt: number;
 }
 
 export interface Message {
@@ -25,3 +33,18 @@ export interface Message {
   content: string;
   timestamp: number;
 }
+
+export type WSClientMessage =
+  | { type: "message"; content: string }
+  | { type: "start" }
+  | { type: "approve" }
+  | { type: "merge" };
+
+export type WSServerMessage =
+  | { type: "token"; content: string }
+  | { type: "message"; role: string; content: string; id: string; timestamp: number }
+  | { type: "card_update"; fields: Partial<Card> }
+  | { type: "status"; column: CardColumn }
+  | { type: "worktree"; path: string }
+  | { type: "pr"; url: string }
+  | { type: "error"; message: string };
