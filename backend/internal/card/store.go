@@ -24,7 +24,7 @@ func (s *Store) Create(title string) Card {
 		ID:        id,
 		Title:     title,
 		Column:    ColumnBacklog,
-		CreatedAt: time.Now(),
+		CreatedAt: time.Now().Unix(),
 	}
 	s.mu.Lock()
 	s.cards[id] = c

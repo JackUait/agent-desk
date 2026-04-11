@@ -2,7 +2,6 @@ package card_test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/card"
 )
@@ -20,7 +19,7 @@ func TestStore_Create(t *testing.T) {
 	if c.Column != card.ColumnBacklog {
 		t.Errorf("expected column %q, got %q", card.ColumnBacklog, c.Column)
 	}
-	if c.CreatedAt.IsZero() {
+	if c.CreatedAt == 0 {
 		t.Error("expected non-zero CreatedAt")
 	}
 }
@@ -107,15 +106,12 @@ func TestStore_Update_PreservesCreatedAt(t *testing.T) {
 	created := s.Create("Card")
 	original := created.CreatedAt
 
-	// Bump time to ensure it would differ if overwritten
-	time.Sleep(time.Millisecond)
-
 	updated := created
-	updated.CreatedAt = time.Now()
+	updated.CreatedAt = original + 999 // attempt to overwrite with a different value
 	s.Update(updated)
 
 	got, _ := s.Get(created.ID)
-	if !got.CreatedAt.Equal(original) {
+	if got.CreatedAt != original {
 		t.Error("Update must not overwrite CreatedAt")
 	}
 }
