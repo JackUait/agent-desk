@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -60,7 +61,8 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	h.hub.Subscribe(cardID, ch)
 	defer h.hub.Unsubscribe(cardID, ch)
 
-	ctx := conn.CloseRead(r.Context())
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
 	// Writer goroutine: hub messages → WebSocket.
 	go func() {
@@ -159,7 +161,7 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 func (h *Handler) broadcastCard(cardID string, c card.Card) {
 	payload := map[string]any{
 		"type": "card_update",
-		"card": c,
+		"fields": c,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {

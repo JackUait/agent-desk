@@ -7,13 +7,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/worktree"
 )
 
 func newHandler() *card.Handler {
 	store := card.NewStore()
 	svc := card.NewService(store)
-	return card.NewHandler(svc)
+	agentMgr := agent.NewManager("echo")
+	worktreeSvc := worktree.NewService("/tmp", "/tmp/worktrees")
+	return card.NewHandler(svc, agentMgr, worktreeSvc)
 }
 
 func TestCreateCard(t *testing.T) {

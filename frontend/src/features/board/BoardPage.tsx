@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useBoard } from "./use-board";
 import { Column } from "./Column";
 import { CardModal } from "../card";
@@ -48,16 +49,18 @@ function CardModalWrapper({
   }
 
   // Sync card updates back to the board
-  if (currentColumn && currentColumn !== card.column) {
-    const columnMap: Record<string, string> = {
-      backlog: "col-backlog",
-      in_progress: "col-progress",
-      review: "col-review",
-      done: "col-done",
-    };
-    updateCard({ ...mergedCard, column: currentColumn });
-    moveCardToColumn(card.id, columnMap[currentColumn]);
-  }
+  useEffect(() => {
+    if (currentColumn && currentColumn !== card.column) {
+      const columnMap: Record<string, string> = {
+        backlog: "col-backlog",
+        in_progress: "col-progress",
+        review: "col-review",
+        done: "col-done",
+      };
+      updateCard({ ...card, ...cardUpdates, column: currentColumn });
+      moveCardToColumn(card.id, columnMap[currentColumn]);
+    }
+  }, [currentColumn]);
 
   return (
     <CardModal

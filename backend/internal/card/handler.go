@@ -2,17 +2,22 @@ package card
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
+	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 )
 
 type Handler struct {
-	svc *Service
+	svc         *Service
+	agentMgr    *agent.Manager
+	worktreeSvc *worktree.Service
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, agentMgr *agent.Manager, worktreeSvc *worktree.Service) *Handler {
+	return &Handler{svc: svc, agentMgr: agentMgr, worktreeSvc: worktreeSvc}
 }
 
 func (h *Handler) CreateCard(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +68,10 @@ func (h *Handler) DeleteCard(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
+	// Best-effort cleanup: kill agent process.
+	if killErr := h.agentMgr.Kill(id); killErr != nil {
+		log.Printf("card: best-effort agent kill for %s: %v", id, killErr)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -72,6 +81,13 @@ func (h *Handler) MergeCard(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httputil.Error(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// Best-effort cleanup: kill agent process and remove worktree.
+	if killErr := h.agentMgr.Kill(id); killErr != nil {
+		log.Printf("card: best-effort agent kill for %s: %v", id, killErr)
+	}
+	if rmErr := h.worktreeSvc.Remove(id); rmErr != nil {
+		log.Printf("card: best-effort worktree remove for %s: %v", id, rmErr)
 	}
 	httputil.JSON(w, http.StatusOK, c)
 }

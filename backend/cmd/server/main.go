@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	ws "github.com/jackuait/agent-desk/backend/internal/websocket"
 	"github.com/jackuait/agent-desk/backend/pkg/middleware"
 )
@@ -26,13 +28,18 @@ func main() {
 
 	cardStore := card.NewStore()
 	cardSvc := card.NewService(cardStore)
-	cardHandler := card.NewHandler(cardSvc)
+
+	agentMgr := agent.NewManager("claude")
+
+	cwd, _ := os.Getwd()
+	worktreeBase := filepath.Join(filepath.Dir(cwd), "agent-desk-worktrees")
+	worktreeSvc := worktree.NewService(cwd, worktreeBase)
+
+	cardHandler := card.NewHandler(cardSvc, agentMgr, worktreeSvc)
 	cardHandler.RegisterRoutes(mux)
 
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
-
-	agentMgr := agent.NewManager("claude")
 	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc)
 	wsHandler.RegisterRoutes(mux)
@@ -41,7 +48,7 @@ func main() {
 		Addr:         ":8080",
 		Handler:      middleware.CORS(mux),
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 	}
 

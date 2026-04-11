@@ -54,11 +54,11 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 				c.Complexity = str
 			}
 		case "acceptanceCriteria":
-			if sl, ok := v.([]string); ok {
+			if sl, ok := toStringSlice(v); ok {
 				c.AcceptanceCriteria = sl
 			}
 		case "relevantFiles":
-			if sl, ok := v.([]string); ok {
+			if sl, ok := toStringSlice(v); ok {
 				c.RelevantFiles = sl
 			}
 		}
@@ -161,4 +161,24 @@ func (s *Service) SetSessionID(id, sessionID string) (Card, error) {
 	c.SessionID = sessionID
 	s.store.Update(c)
 	return c, nil
+}
+
+// toStringSlice converts a value to []string, handling both []string (from Go callers)
+// and []any (from JSON-decoded map[string]any).
+func toStringSlice(v any) ([]string, bool) {
+	switch val := v.(type) {
+	case []string:
+		return val, true
+	case []any:
+		out := make([]string, len(val))
+		for i, item := range val {
+			s, ok := item.(string)
+			if !ok {
+				return nil, false
+			}
+			out[i] = s
+		}
+		return out, true
+	}
+	return nil, false
 }
