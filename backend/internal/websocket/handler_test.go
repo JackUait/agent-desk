@@ -72,6 +72,54 @@ func TestHandler_ClientReceivesHubBroadcast(t *testing.T) {
 	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
+func TestHandler_BroadcastsErrorOnInvalidMerge(t *testing.T) {
+	srv, cardID, _ := buildServer(t)
+
+	// Card is in "backlog" — merging requires "review", so this must fail.
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/cards/" + cardID + "/ws"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := gowebsocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	// Give the server a moment to set up the subscription.
+	time.Sleep(20 * time.Millisecond)
+
+	// Send a merge command — should fail because card is in backlog.
+	mergeMsg, _ := json.Marshal(map[string]string{"type": "merge"})
+	if err := conn.Write(ctx, gowebsocket.MessageText, mergeMsg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Read the response — expect an error message broadcast.
+	conn.SetReadLimit(1 << 20)
+	_, got, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	var resp struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(got, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Type != "error" {
+		t.Fatalf("expected type %q, got %q", "error", resp.Type)
+	}
+	if !strings.Contains(resp.Message, "MoveToDone") {
+		t.Fatalf("expected message to mention MoveToDone, got %q", resp.Message)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
 func TestHandler_Returns404ForUnknownCard(t *testing.T) {
 	srv, _, _ := buildServer(t)
 

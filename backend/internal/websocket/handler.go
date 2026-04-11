@@ -100,12 +100,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case "message":
 			if sendErr := h.manager.Send(cardID, msg.Content); sendErr != nil {
 				log.Printf("ws: send error for card %s: %v", cardID, sendErr)
+				h.broadcastError(cardID, sendErr.Error())
 			}
 
 		case "start":
 			updated, svcErr := h.cardSvc.StartDevelopment(cardID)
 			if svcErr != nil {
 				log.Printf("ws: StartDevelopment error for card %s: %v", cardID, svcErr)
+				h.broadcastError(cardID, svcErr.Error())
 				break
 			}
 			h.broadcastCard(cardID, updated)
@@ -122,6 +124,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			updated, svcErr := h.cardSvc.MoveToDone(cardID)
 			if svcErr != nil {
 				log.Printf("ws: MoveToDone error for card %s: %v", cardID, svcErr)
+				h.broadcastError(cardID, svcErr.Error())
 				break
 			}
 			h.broadcastCard(cardID, updated)
@@ -155,6 +158,12 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			}
 		}
 	}
+}
+
+// broadcastError sends an error message to all hub subscribers for a card.
+func (h *Handler) broadcastError(cardID string, msg string) {
+	payload, _ := json.Marshal(map[string]string{"type": "error", "message": msg})
+	h.hub.Broadcast(cardID, payload)
 }
 
 // broadcastCard serialises a card and broadcasts it to hub subscribers.

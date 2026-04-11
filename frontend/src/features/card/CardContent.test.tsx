@@ -116,6 +116,34 @@ describe("CardContent", () => {
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onApprove when clicking Approve", async () => {
+    const onApprove = vi.fn();
+    render(
+      <CardContent
+        card={makeCard({ column: "review", prUrl: "" })}
+        onStart={noop}
+        onApprove={onApprove}
+        onMerge={noop}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Approve" }));
+    expect(onApprove).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onMerge when clicking Merge", async () => {
+    const onMerge = vi.fn();
+    render(
+      <CardContent
+        card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
+        onStart={noop}
+        onApprove={noop}
+        onMerge={onMerge}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Merge" }));
+    expect(onMerge).toHaveBeenCalledTimes(1);
+  });
+
   it("renders acceptance criteria as list items", () => {
     render(
       <CardContent
