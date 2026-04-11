@@ -9,8 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	ws "github.com/jackuait/agent-desk/backend/internal/websocket"
 	"github.com/jackuait/agent-desk/backend/pkg/middleware"
 )
 
@@ -29,6 +31,11 @@ func main() {
 
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
+
+	agentMgr := agent.NewManager("claude")
+	wsHub := ws.NewHub()
+	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc)
+	wsHandler.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:         ":8080",
