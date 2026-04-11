@@ -3,7 +3,7 @@ import { Column } from "./Column";
 import styles from "./BoardPage.module.css";
 
 export function BoardPage() {
-  const { board, cards, enteringCards, exitingCards, workingCards } = useBoard(true);
+  const { board, cards, enteringCards, exitingCards, workingCards } = useBoard();
 
   return (
     <div className={styles.page}>

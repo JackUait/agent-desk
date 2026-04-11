@@ -1,6 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 import type { Board, Card } from "../../shared/types/domain";
-import { MOCK_BOARD, MOCK_CARDS, COLUMN_ORDER } from "./mock-data";
+
+const EMPTY_BOARD: Board = {
+  id: "board-1",
+  title: "Agent Desk",
+  columns: [
+    { id: "col-backlog", title: "Backlog", cardIds: [] },
+    { id: "col-progress", title: "In Progress", cardIds: [] },
+    { id: "col-review", title: "Review", cardIds: [] },
+    { id: "col-done", title: "Done", cardIds: [] },
+  ],
+};
 
 export interface UseBoardResult {
   board: Board;
@@ -28,38 +38,35 @@ function moveCardInBoard(board: Board, cardId: string, from: string, to: string)
   };
 }
 
-export function useBoard(autoMove = false): UseBoardResult {
-  const [board, setBoard] = useState<Board>(MOCK_BOARD);
-  const [cards] = useState<Record<string, Card>>(MOCK_CARDS);
+export function useBoard(
+  initialBoard: Board = EMPTY_BOARD,
+  initialCards: Record<string, Card> = {},
+): UseBoardResult {
+  const [board, setBoard] = useState<Board>(initialBoard);
+  const [cards] = useState<Record<string, Card>>(initialCards);
   const [exitingCards, setExitingCards] = useState<Set<string>>(new Set());
   const [enteringCards, setEnteringCards] = useState<Set<string>>(new Set());
   const [workingCards, setWorkingCards] = useState<Set<string>>(new Set());
-  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const inFlightRef = useRef<Set<string>>(new Set());
 
   const moveCard = useCallback(
     (cardId: string, fromColumnId: string, toColumnId: string) => {
       setBoard((prev) => moveCardInBoard(prev, cardId, fromColumnId, toColumnId));
       setEnteringCards((prev) => new Set(prev).add(cardId));
-      const t = setTimeout(() => {
+      setTimeout(() => {
         setEnteringCards((prev) => {
           const next = new Set(prev);
           next.delete(cardId);
           return next;
         });
-        inFlightRef.current.delete(cardId);
       }, 500);
-      timersRef.current.push(t);
     },
     [],
   );
 
   const startMove = useCallback(
     (cardId: string, fromColumnId: string, toColumnId: string) => {
-      inFlightRef.current.add(cardId);
       setExitingCards((prev) => new Set(prev).add(cardId));
-
-      const t1 = setTimeout(() => {
+      setTimeout(() => {
         setExitingCards((prev) => {
           const next = new Set(prev);
           next.delete(cardId);
@@ -67,7 +74,6 @@ export function useBoard(autoMove = false): UseBoardResult {
         });
         moveCard(cardId, fromColumnId, toColumnId);
       }, 400);
-      timersRef.current.push(t1);
     },
     [moveCard],
   );
@@ -80,55 +86,6 @@ export function useBoard(autoMove = false): UseBoardResult {
       return next;
     });
   }, []);
-
-  useEffect(() => {
-    if (!autoMove) return;
-
-    function tick() {
-      setBoard((currentBoard) => {
-        const movable: { cardId: string; from: string; to: string }[] = [];
-        for (let i = 0; i < COLUMN_ORDER.length - 1; i++) {
-          const col = currentBoard.columns.find((c) => c.id === COLUMN_ORDER[i]);
-          if (col && col.cardIds.length > 0) {
-            for (const cardId of col.cardIds) {
-              if (!inFlightRef.current.has(cardId)) {
-                movable.push({ cardId, from: col.id, to: COLUMN_ORDER[i + 1] });
-              }
-            }
-          }
-        }
-        if (movable.length === 0) return currentBoard;
-
-        const pick = movable[Math.floor(Math.random() * movable.length)];
-        inFlightRef.current.add(pick.cardId);
-
-        setWorkingCards((prev) => new Set(prev).add(pick.cardId));
-
-        const t = setTimeout(() => {
-          setWorkingCards((prev) => {
-            const next = new Set(prev);
-            next.delete(pick.cardId);
-            return next;
-          });
-          startMove(pick.cardId, pick.from, pick.to);
-        }, 1200 + Math.random() * 800);
-        timersRef.current.push(t);
-
-        return currentBoard;
-      });
-    }
-
-    const interval = setInterval(tick, 3000 + Math.random() * 3000);
-
-    const initialDelay = setTimeout(tick, 1500);
-    timersRef.current.push(initialDelay);
-
-    return () => {
-      clearInterval(interval);
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-    };
-  }, [autoMove, startMove]);
 
   return { board, cards, exitingCards, enteringCards, workingCards, moveCard, startMove, setAgentWorking };
 }

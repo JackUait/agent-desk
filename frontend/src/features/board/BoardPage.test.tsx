@@ -22,16 +22,9 @@ describe("BoardPage", () => {
     expect(screen.getByText("Done")).toBeInTheDocument();
   });
 
-  it("renders cards within columns", () => {
+  it("renders empty columns with zero counts", () => {
     renderWithRouter(<BoardPage />);
-    expect(screen.getByText("Set up CI pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Design auth flow")).toBeInTheDocument();
-    expect(screen.getByText("Fix memory leak in worker")).toBeInTheDocument();
-  });
-
-  it("shows agent names on cards", () => {
-    renderWithRouter(<BoardPage />);
-    expect(screen.getByText("DevOps-1")).toBeInTheDocument();
-    expect(screen.getByText("Architect-1")).toBeInTheDocument();
+    const zeroCounts = screen.getAllByText("0");
+    expect(zeroCounts).toHaveLength(4);
   });
 });
