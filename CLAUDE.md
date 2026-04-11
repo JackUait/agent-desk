@@ -53,8 +53,5 @@ Before considering any task done:
 
 ## Common Pitfalls
 
-- DO NOT install a Go web framework — use stdlib `net/http`
-- DO NOT add a database driver — interfaces only
-- DO NOT implement AgentProvider — interface definition only
 - DO NOT add authentication or sessions
 - DO NOT modify tooling configs (vite, vitest, eslint, tsconfig, playwright) without explicit request
