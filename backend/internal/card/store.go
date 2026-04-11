@@ -3,6 +3,7 @@ package card
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"sort"
 	"sync"
 	"time"
 )
@@ -46,6 +47,9 @@ func (s *Store) List() []Card {
 		out = append(out, c)
 	}
 	s.mu.RUnlock()
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt < out[j].CreatedAt
+	})
 	return out
 }
 

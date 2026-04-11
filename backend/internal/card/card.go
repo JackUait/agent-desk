@@ -1,6 +1,6 @@
 package card
 
-type Column = string
+type Column string
 
 const (
 	ColumnBacklog    Column = "backlog"
