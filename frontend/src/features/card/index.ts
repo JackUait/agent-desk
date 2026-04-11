@@ -1,1 +1,2 @@
-export { CardDetail } from "./CardDetail";
+export { CardModal } from "./CardModal";
+export { CardContent } from "./CardContent";
