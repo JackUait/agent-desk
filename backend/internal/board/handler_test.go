@@ -7,134 +7,76 @@ import (
 	"testing"
 
 	"github.com/jackuait/agent-desk/backend/internal/board"
+	"github.com/jackuait/agent-desk/backend/internal/card"
 )
 
-func makeRequest(t *testing.T, handler http.HandlerFunc, method, path string, pathValues map[string]string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := httptest.NewRequest(method, path, nil)
-	for k, v := range pathValues {
-		req.SetPathValue(k, v)
-	}
+func newBoardHandler() *board.Handler {
+	store := card.NewStore()
+	return board.NewHandler(store)
+}
+
+func newBoardHandlerWithStore(store *card.Store) *board.Handler {
+	return board.NewHandler(store)
+}
+
+func TestGetBoardReturnsFourColumns(t *testing.T) {
+	h := newBoardHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/board", nil)
 	rec := httptest.NewRecorder()
-	handler(rec, req)
-	return rec
-}
+	h.GetBoard(rec, req)
 
-func assertStatus(t *testing.T, rec *httptest.ResponseRecorder, expected int) {
-	t.Helper()
-	if rec.Code != expected {
-		t.Errorf("expected status %d, got %d", expected, rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp board.BoardResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode error: %v", err)
+	}
+
+	if len(resp.Columns) != 4 {
+		t.Errorf("expected 4 columns, got %d", len(resp.Columns))
+	}
+
+	wantIDs := []string{"col-backlog", "col-progress", "col-review", "col-done"}
+	for i, col := range resp.Columns {
+		if col.ID != wantIDs[i] {
+			t.Errorf("column %d: expected ID %q, got %q", i, wantIDs[i], col.ID)
+		}
+		if col.CardIDs == nil {
+			t.Errorf("column %d: CardIDs must not be nil", i)
+		}
 	}
 }
 
-func assertContentType(t *testing.T, rec *httptest.ResponseRecorder, expected string) {
-	t.Helper()
-	ct := rec.Header().Get("Content-Type")
-	if ct != expected {
-		t.Errorf("expected Content-Type %q, got %q", expected, ct)
-	}
-}
+func TestGetBoardCardAppearsInCorrectColumn(t *testing.T) {
+	store := card.NewStore()
+	created := store.Create("Test Card")
+	h := newBoardHandlerWithStore(store)
 
-func assertJSONBody(t *testing.T, rec *httptest.ResponseRecorder, target any) {
-	t.Helper()
-	if err := json.NewDecoder(rec.Body).Decode(target); err != nil {
-		t.Fatalf("failed to decode response body: %v", err)
-	}
-}
+	req := httptest.NewRequest(http.MethodGet, "/api/board", nil)
+	rec := httptest.NewRecorder()
+	h.GetBoard(rec, req)
 
-func TestBoardHandlers(t *testing.T) {
-	tests := []struct {
-		name           string
-		handler        http.HandlerFunc
-		method         string
-		path           string
-		pathValues     map[string]string
-		expectedStatus int
-		checkBody      func(t *testing.T, rec *httptest.ResponseRecorder)
-	}{
-		{
-			name:           "ListBoards returns empty array",
-			handler:        board.ListBoards,
-			method:         http.MethodGet,
-			path:           "/api/boards",
-			expectedStatus: http.StatusOK,
-			checkBody: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var boards []board.Board
-				assertJSONBody(t, rec, &boards)
-				if len(boards) != 0 {
-					t.Errorf("expected empty array, got %d items", len(boards))
-				}
-			},
-		},
-		{
-			name:           "GetBoard returns board with requested ID",
-			handler:        board.GetBoard,
-			method:         http.MethodGet,
-			path:           "/api/boards/board-1",
-			pathValues:     map[string]string{"id": "board-1"},
-			expectedStatus: http.StatusOK,
-			checkBody: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var b board.Board
-				assertJSONBody(t, rec, &b)
-				if b.ID != "board-1" {
-					t.Errorf("expected ID %q, got %q", "board-1", b.ID)
-				}
-			},
-		},
-		{
-			name:           "CreateBoard returns created board",
-			handler:        board.CreateBoard,
-			method:         http.MethodPost,
-			path:           "/api/boards",
-			expectedStatus: http.StatusCreated,
-			checkBody: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var b board.Board
-				assertJSONBody(t, rec, &b)
-				if b.ID == "" {
-					t.Error("expected non-empty ID")
-				}
-			},
-		},
-		{
-			name:           "UpdateBoard returns updated board with ID",
-			handler:        board.UpdateBoard,
-			method:         http.MethodPut,
-			path:           "/api/boards/board-1",
-			pathValues:     map[string]string{"id": "board-1"},
-			expectedStatus: http.StatusOK,
-			checkBody: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var b board.Board
-				assertJSONBody(t, rec, &b)
-				if b.ID != "board-1" {
-					t.Errorf("expected ID %q, got %q", "board-1", b.ID)
-				}
-			},
-		},
-		{
-			name:           "DeleteBoard returns no content",
-			handler:        board.DeleteBoard,
-			method:         http.MethodDelete,
-			path:           "/api/boards/board-1",
-			pathValues:     map[string]string{"id": "board-1"},
-			expectedStatus: http.StatusNoContent,
-			checkBody: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				if rec.Body.Len() != 0 {
-					t.Errorf("expected empty body, got %q", rec.Body.String())
-				}
-			},
-		},
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rec := makeRequest(t, tt.handler, tt.method, tt.path, tt.pathValues)
-			assertStatus(t, rec, tt.expectedStatus)
-			if tt.expectedStatus != http.StatusNoContent {
-				assertContentType(t, rec, "application/json")
-			}
-			if tt.checkBody != nil {
-				tt.checkBody(t, rec)
-			}
-		})
+	var resp board.BoardResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	var backlogCol board.ColumnResponse
+	for _, col := range resp.Columns {
+		if col.ID == "col-backlog" {
+			backlogCol = col
+			break
+		}
+	}
+
+	if len(backlogCol.CardIDs) != 1 {
+		t.Fatalf("expected 1 card in backlog, got %d", len(backlogCol.CardIDs))
+	}
+	if backlogCol.CardIDs[0] != created.ID {
+		t.Errorf("expected card ID %q in backlog, got %q", created.ID, backlogCol.CardIDs[0])
 	}
 }
