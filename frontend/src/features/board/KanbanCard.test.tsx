@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { KanbanCard } from "./KanbanCard";
 import type { Card } from "../../shared/types/domain";
 
@@ -7,9 +8,15 @@ const card: Card = {
   id: "card-1",
   title: "Set up CI pipeline",
   description: "Configure GitHub Actions",
-  status: "backlog",
-  agentName: "DevOps-1",
-  messages: [],
+  column: "backlog",
+  acceptanceCriteria: [],
+  complexity: "",
+  relevantFiles: [],
+  sessionId: "",
+  worktreePath: "",
+  branchName: "",
+  prUrl: "",
+  createdAt: 1000,
 };
 
 describe("KanbanCard", () => {
@@ -18,9 +25,9 @@ describe("KanbanCard", () => {
     expect(screen.getByText("Set up CI pipeline")).toBeInTheDocument();
   });
 
-  it("renders the agent name", () => {
+  it("renders the column as a tag", () => {
     render(<KanbanCard card={card} />);
-    expect(screen.getByText("DevOps-1")).toBeInTheDocument();
+    expect(screen.getByText("Backlog")).toBeInTheDocument();
   });
 
   it("renders the description", () => {
@@ -46,5 +53,12 @@ describe("KanbanCard", () => {
   it("shows status indicator for working agent", () => {
     render(<KanbanCard card={card} isWorking />);
     expect(screen.getByTestId("agent-status")).toBeInTheDocument();
+  });
+
+  it("calls onClick when clicked", async () => {
+    const onClick = vi.fn();
+    render(<KanbanCard card={card} onClick={onClick} />);
+    await userEvent.click(screen.getByText("Set up CI pipeline"));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

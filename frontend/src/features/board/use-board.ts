@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Board, Card } from "../../shared/types/domain";
+import { api } from "../../shared/api/client";
 
 const EMPTY_BOARD: Board = {
   id: "board-1",
@@ -15,42 +16,91 @@ const EMPTY_BOARD: Board = {
 export interface UseBoardResult {
   board: Board;
   cards: Record<string, Card>;
-  exitingCards: Set<string>;
+  selectedCardId: string | null;
   enteringCards: Set<string>;
+  exitingCards: Set<string>;
   workingCards: Set<string>;
-  moveCard: (cardId: string, fromColumnId: string, toColumnId: string) => void;
-  startMove: (cardId: string, fromColumnId: string, toColumnId: string) => void;
-  setAgentWorking: (cardId: string, working: boolean) => void;
+  loading: boolean;
+  createCard: (title: string) => Promise<void>;
+  selectCard: (id: string | null) => void;
+  updateCard: (card: Card) => void;
+  moveCardToColumn: (cardId: string, toColumnId: string) => void;
+  refresh: () => Promise<void>;
 }
 
-function moveCardInBoard(board: Board, cardId: string, from: string, to: string): Board {
-  return {
-    ...board,
-    columns: board.columns.map((col) => {
-      if (col.id === from) {
-        return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
-      }
-      if (col.id === to) {
-        return { ...col, cardIds: [...col.cardIds, cardId] };
-      }
-      return col;
-    }),
-  };
-}
-
-export function useBoard(
-  initialBoard: Board = EMPTY_BOARD,
-  initialCards: Record<string, Card> = {},
-): UseBoardResult {
-  const [board, setBoard] = useState<Board>(initialBoard);
-  const [cards] = useState<Record<string, Card>>(initialCards);
-  const [exitingCards, setExitingCards] = useState<Set<string>>(new Set());
+export function useBoard(): UseBoardResult {
+  const [board, setBoard] = useState<Board>(EMPTY_BOARD);
+  const [cards, setCards] = useState<Record<string, Card>>({});
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [enteringCards, setEnteringCards] = useState<Set<string>>(new Set());
-  const [workingCards, setWorkingCards] = useState<Set<string>>(new Set());
+  const [exitingCards, setExitingCards] = useState<Set<string>>(new Set());
+  const [workingCards] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
-  const moveCard = useCallback(
-    (cardId: string, fromColumnId: string, toColumnId: string) => {
-      setBoard((prev) => moveCardInBoard(prev, cardId, fromColumnId, toColumnId));
+  const refresh = useCallback(async () => {
+    try {
+      const [boardData, cardList] = await Promise.all([
+        api.getBoard(),
+        api.listCards(),
+      ]);
+      setBoard(boardData);
+      const cardMap: Record<string, Card> = {};
+      for (const c of cardList) {
+        cardMap[c.id] = c;
+      }
+      setCards(cardMap);
+    } catch {
+      // keep existing state on error
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const createCard = useCallback(async (title: string) => {
+    const card = await api.createCard(title);
+    setCards((prev) => ({ ...prev, [card.id]: card }));
+    setBoard((prev) => ({
+      ...prev,
+      columns: prev.columns.map((col) =>
+        col.id === "col-backlog"
+          ? { ...col, cardIds: [...col.cardIds, card.id] }
+          : col,
+      ),
+    }));
+  }, []);
+
+  const selectCard = useCallback((id: string | null) => {
+    setSelectedCardId(id);
+  }, []);
+
+  const updateCard = useCallback((card: Card) => {
+    setCards((prev) => ({ ...prev, [card.id]: card }));
+  }, []);
+
+  const moveCardToColumn = useCallback((cardId: string, toColumnId: string) => {
+    setExitingCards((prev) => new Set(prev).add(cardId));
+    setTimeout(() => {
+      setExitingCards((prev) => {
+        const next = new Set(prev);
+        next.delete(cardId);
+        return next;
+      });
+      setBoard((prev) => ({
+        ...prev,
+        columns: prev.columns.map((col) => {
+          if (col.cardIds.includes(cardId)) {
+            return { ...col, cardIds: col.cardIds.filter((id) => id !== cardId) };
+          }
+          if (col.id === toColumnId) {
+            return { ...col, cardIds: [...col.cardIds, cardId] };
+          }
+          return col;
+        }),
+      }));
       setEnteringCards((prev) => new Set(prev).add(cardId));
       setTimeout(() => {
         setEnteringCards((prev) => {
@@ -59,33 +109,21 @@ export function useBoard(
           return next;
         });
       }, 500);
-    },
-    [],
-  );
-
-  const startMove = useCallback(
-    (cardId: string, fromColumnId: string, toColumnId: string) => {
-      setExitingCards((prev) => new Set(prev).add(cardId));
-      setTimeout(() => {
-        setExitingCards((prev) => {
-          const next = new Set(prev);
-          next.delete(cardId);
-          return next;
-        });
-        moveCard(cardId, fromColumnId, toColumnId);
-      }, 400);
-    },
-    [moveCard],
-  );
-
-  const setAgentWorking = useCallback((cardId: string, working: boolean) => {
-    setWorkingCards((prev) => {
-      const next = new Set(prev);
-      if (working) next.add(cardId);
-      else next.delete(cardId);
-      return next;
-    });
+    }, 400);
   }, []);
 
-  return { board, cards, exitingCards, enteringCards, workingCards, moveCard, startMove, setAgentWorking };
+  return {
+    board,
+    cards,
+    selectedCardId,
+    enteringCards,
+    exitingCards,
+    workingCards,
+    loading,
+    createCard,
+    selectCard,
+    updateCard,
+    moveCardToColumn,
+    refresh,
+  };
 }

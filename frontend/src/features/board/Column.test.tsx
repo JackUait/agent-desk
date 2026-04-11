@@ -8,17 +8,29 @@ const cards: Record<string, Card> = {
     id: "card-1",
     title: "Set up CI pipeline",
     description: "Configure GitHub Actions",
-    status: "backlog",
-    agentName: "DevOps-1",
-    messages: [],
+    column: "backlog",
+    acceptanceCriteria: [],
+    complexity: "",
+    relevantFiles: [],
+    sessionId: "",
+    worktreePath: "",
+    branchName: "",
+    prUrl: "",
+    createdAt: 1000,
   },
   "card-2": {
     id: "card-2",
     title: "Design auth flow",
     description: "Token-based auth",
-    status: "backlog",
-    agentName: "Architect-1",
-    messages: [],
+    column: "backlog",
+    acceptanceCriteria: [],
+    complexity: "",
+    relevantFiles: [],
+    sessionId: "",
+    worktreePath: "",
+    branchName: "",
+    prUrl: "",
+    createdAt: 1001,
   },
 };
 
@@ -31,7 +43,7 @@ const column: ColumnType = {
 describe("Column", () => {
   it("renders the column title", () => {
     render(<Column column={column} cards={cards} />);
-    expect(screen.getByText("Backlog")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Backlog" })).toBeInTheDocument();
   });
 
   it("renders the card count", () => {
