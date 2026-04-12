@@ -3,9 +3,11 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
@@ -46,16 +48,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 
-	// Spawn agent if not already running.
-	if !h.manager.IsRunning(cardID) {
-		events := make(chan agent.StreamEvent, 64)
-		if spawnErr := h.manager.Spawn(cardID, c.SessionID, events); spawnErr != nil {
-			log.Printf("ws: spawn error for card %s: %v", cardID, spawnErr)
-		} else {
-			go h.StartEventBridge(cardID, events)
-		}
-	}
-
 	// Subscribe this connection to the hub.
 	ch := make(chan []byte, 64)
 	h.hub.Subscribe(cardID, ch)
@@ -81,6 +73,18 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// sendToAgent spawns a per-message Claude CLI process and bridges events.
+	sendToAgent := func(message string) {
+		c, _ = h.cardSvc.GetCard(cardID)
+		events := make(chan agent.StreamEvent, 64)
+		if sendErr := h.manager.Send(cardID, c.SessionID, message, events); sendErr != nil {
+			log.Printf("ws: send error for card %s: %v", cardID, sendErr)
+			h.broadcastError(cardID, sendErr.Error())
+			return
+		}
+		go h.StartEventBridge(cardID, events)
+	}
+
 	// Reader loop: WebSocket messages → agent/service actions.
 	for {
 		_, data, readErr := conn.Read(ctx)
@@ -98,10 +102,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		switch msg.Type {
 		case "message":
-			if sendErr := h.manager.Send(cardID, msg.Content); sendErr != nil {
-				log.Printf("ws: send error for card %s: %v", cardID, sendErr)
-				h.broadcastError(cardID, sendErr.Error())
-			}
+			sendToAgent(msg.Content)
 
 		case "start":
 			updated, svcErr := h.cardSvc.StartDevelopment(cardID)
@@ -111,14 +112,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			h.broadcastCard(cardID, updated)
-			if sendErr := h.manager.Send(cardID, "Start development now."); sendErr != nil {
-				log.Printf("ws: send start error for card %s: %v", cardID, sendErr)
-			}
+			sendToAgent("Start development now.")
 
 		case "approve":
-			if sendErr := h.manager.Send(cardID, "Create a PR now."); sendErr != nil {
-				log.Printf("ws: send approve error for card %s: %v", cardID, sendErr)
-			}
+			sendToAgent("Create a PR now.")
 
 		case "merge":
 			updated, svcErr := h.cardSvc.MoveToDone(cardID)
@@ -134,28 +131,53 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
-// StartEventBridge reads agent events and broadcasts them to hub subscribers.
-// It also detects "READY_FOR_REVIEW" in text deltas and moves the card to review.
+// StartEventBridge reads agent events, translates them into the WSServerMessage
+// format the frontend expects, and broadcasts them to hub subscribers.
 func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEvent) {
+	var buf strings.Builder
+	msgCounter := 0
+
 	for ev := range events {
 		// Capture session ID on first message_start.
 		if ev.Type == agent.EventMessageStart && ev.SessionID != "" {
 			if _, err := h.cardSvc.SetSessionID(cardID, ev.SessionID); err != nil {
 				log.Printf("ws: SetSessionID error for card %s: %v", cardID, err)
 			}
+			buf.Reset()
 		}
 
-		// Forward raw event JSON to subscribers.
-		h.hub.Broadcast(cardID, ev.Raw)
+		switch ev.Type {
+		case agent.EventTextDelta:
+			// Stream each text chunk as a "token" message.
+			payload, _ := json.Marshal(map[string]string{
+				"type":    "token",
+				"content": ev.Text,
+			})
+			h.hub.Broadcast(cardID, payload)
+			buf.WriteString(ev.Text)
 
-		// Detect review signal in text deltas.
-		if ev.Type == agent.EventTextDelta && strings.Contains(ev.Text, "READY_FOR_REVIEW") {
-			if _, err := h.cardSvc.MoveToReview(cardID); err != nil {
-				log.Printf("ws: MoveToReview error for card %s: %v", cardID, err)
-			} else {
-				c, _ := h.cardSvc.GetCard(cardID)
-				h.broadcastCard(cardID, c)
+			// Detect review signal.
+			if strings.Contains(ev.Text, "READY_FOR_REVIEW") {
+				if _, err := h.cardSvc.MoveToReview(cardID); err != nil {
+					log.Printf("ws: MoveToReview error for card %s: %v", cardID, err)
+				} else {
+					c, _ := h.cardSvc.GetCard(cardID)
+					h.broadcastCard(cardID, c)
+				}
 			}
+
+		case agent.EventMessageStop:
+			// Emit the completed assistant message.
+			msgCounter++
+			payload, _ := json.Marshal(map[string]any{
+				"type":      "message",
+				"role":      "assistant",
+				"content":   buf.String(),
+				"id":        fmt.Sprintf("msg-%s-%d", cardID[:8], msgCounter),
+				"timestamp": time.Now().UnixMilli(),
+			})
+			h.hub.Broadcast(cardID, payload)
+			buf.Reset()
 		}
 	}
 }

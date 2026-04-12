@@ -22,10 +22,12 @@ func NewStore() *Store {
 func (s *Store) Create(title string) Card {
 	id := newID()
 	c := Card{
-		ID:        id,
-		Title:     title,
-		Column:    ColumnBacklog,
-		CreatedAt: time.Now().Unix(),
+		ID:                 id,
+		Title:              title,
+		Column:             ColumnBacklog,
+		AcceptanceCriteria: []string{},
+		RelevantFiles:      []string{},
+		CreatedAt:          time.Now().Unix(),
 	}
 	s.mu.Lock()
 	s.cards[id] = c
