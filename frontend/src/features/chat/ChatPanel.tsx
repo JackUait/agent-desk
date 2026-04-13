@@ -1,17 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import type { Message } from "../../shared/types/domain";
+import type { Message, Model } from "../../shared/types/domain";
 import type { ChatBlock, ChatStreamState, ChatTurn } from "./chatStream";
 import { ChatMessage } from "./ChatMessage";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolUseBlock } from "./ToolUseBlock";
 import { TextBlock } from "./TextBlock";
+import { ModelChooser } from "./ModelChooser";
 import styles from "./ChatPanel.module.css";
 
 interface ChatPanelProps {
   userMessages: Message[];
   chatStream: ChatStreamState;
-  onSend: (content: string) => void;
+  onSend: (content: string, model: string) => void;
+  models: Model[];
+  cardModel: string;
   readOnly?: boolean;
+}
+
+const DEFAULT_MODEL = "claude-opus-4-6";
+const LAST_MODEL_KEY = "agentDesk.lastModel";
+
+function initialSelectedModel(cardModel: string, models: Model[]): string {
+  if (cardModel) return cardModel;
+  try {
+    const stored = window.localStorage.getItem(LAST_MODEL_KEY);
+    if (stored && models.some((m) => m.id === stored)) {
+      return stored;
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_MODEL;
 }
 
 function formatDuration(ms: number): string {
@@ -73,9 +92,14 @@ export function ChatPanel({
   userMessages,
   chatStream,
   onSend,
+  models,
+  cardModel,
   readOnly,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [selectedModel, setSelectedModel] = useState<string>(() =>
+    initialSelectedModel(cardModel, models),
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollKey = scrollSignature(userMessages, chatStream);
 
@@ -83,11 +107,25 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [scrollKey]);
 
+  // Re-sync selected model when the card's persisted model changes
+  // (e.g. a card_update broadcast). Depending only on cardModel here is
+  // intentional: local user edits to selectedModel must not be clobbered.
+  useEffect(() => {
+    if (cardModel) {
+      setSelectedModel((current) => (current === cardModel ? current : cardModel));
+    }
+  }, [cardModel]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || readOnly) return;
-    onSend(trimmed);
+    onSend(trimmed, selectedModel);
+    try {
+      window.localStorage.setItem(LAST_MODEL_KEY, selectedModel);
+    } catch {
+      /* ignore */
+    }
     setInput("");
   }
 
@@ -125,13 +163,21 @@ export function ChatPanel({
           disabled={readOnly}
           aria-label="Message input"
         />
-        <button
-          className={styles.sendButton}
-          type="submit"
-          disabled={readOnly || !input.trim()}
-        >
-          Send
-        </button>
+        <div className={styles.composerRow}>
+          <ModelChooser
+            models={models}
+            value={selectedModel}
+            onChange={setSelectedModel}
+            disabled={readOnly || chatStream.turnInFlight}
+          />
+          <button
+            className={styles.sendButton}
+            type="submit"
+            disabled={readOnly || !input.trim()}
+          >
+            Send
+          </button>
+        </div>
       </form>
     </div>
   );

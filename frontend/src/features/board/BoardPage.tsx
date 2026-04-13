@@ -67,7 +67,8 @@ function CardModalWrapper({
       card={mergedCard}
       userMessages={userMessages}
       chatStream={chatStream}
-      onSend={sendMessage}
+      models={[]}
+      onSend={(content) => sendMessage(content)}
       onStart={handleStart}
       onApprove={handleApprove}
       onMerge={handleMerge}

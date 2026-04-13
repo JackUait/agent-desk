@@ -13,7 +13,24 @@ const reduce = (state: ChatStreamState, frames: unknown[]): ChatStreamState =>
 
 describe("chatStreamReducer", () => {
   it("initialChatStreamState is empty", () => {
-    expect(initialChatStreamState).toEqual({ turns: [] });
+    expect(initialChatStreamState).toEqual({ turns: [], turnInFlight: false });
+  });
+
+  it("turn_start sets turnInFlight true and turn_end clears it", () => {
+    const afterStart = chatStreamReducer(initialChatStreamState, {
+      type: "turn_start",
+      sessionId: "s1",
+    });
+    expect(afterStart.turnInFlight).toBe(true);
+    const afterEnd = chatStreamReducer(afterStart, {
+      type: "turn_end",
+      durationMs: 1,
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      stopReason: "end_turn",
+    });
+    expect(afterEnd.turnInFlight).toBe(false);
   });
 
   it("turn_start creates a new streaming turn with sessionId", () => {
@@ -344,6 +361,7 @@ describe("chatStreamReducer", () => {
           ],
         },
       ],
+      turnInFlight: false,
     });
   });
 });

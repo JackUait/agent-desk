@@ -56,9 +56,13 @@ export type ChatTurn = {
 
 export type ChatStreamState = {
   turns: ChatTurn[];
+  turnInFlight: boolean;
 };
 
-export const initialChatStreamState: ChatStreamState = { turns: [] };
+export const initialChatStreamState: ChatStreamState = {
+  turns: [],
+  turnInFlight: false,
+};
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -120,7 +124,11 @@ export function chatStreamReducer(
         blocks: [],
         status: "streaming",
       };
-      return { ...state, turns: [...state.turns, newTurn] };
+      return {
+        ...state,
+        turns: [...state.turns, newTurn],
+        turnInFlight: true,
+      };
     }
 
     case "block_start": {
@@ -208,7 +216,7 @@ export function chatStreamReducer(
 
     case "turn_end": {
       if (state.turns.length === 0) return state;
-      return replaceLastTurn(state, (turn) => ({
+      const next = replaceLastTurn(state, (turn) => ({
         ...turn,
         status: "done",
         metrics: {
@@ -219,6 +227,7 @@ export function chatStreamReducer(
           stopReason: frame.stopReason,
         },
       }));
+      return { ...next, turnInFlight: false };
     }
 
     default: {
