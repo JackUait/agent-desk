@@ -1,0 +1,5 @@
+{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_011dUgeB9w6PKzWSaTNpwPLe","name":"Bash","input":{}}},"session_id":"15395b95-1159-47a8-bf11-40bcb654a41f"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"comman"}},"session_id":"15395b95-1159-47a8-bf11-40bcb654a41f"}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"d\": \"echo hello world\"}"}},"session_id":"15395b95-1159-47a8-bf11-40bcb654a41f"}
+{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"15395b95-1159-47a8-bf11-40bcb654a41f"}
+{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_011dUgeB9w6PKzWSaTNpwPLe","type":"tool_result","content":"hello world\n","is_error":false}]},"session_id":"15395b95-1159-47a8-bf11-40bcb654a41f"}
