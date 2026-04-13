@@ -131,24 +131,54 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
-// StartEventBridge reads agent events, translates them into the WSServerMessage
-// format the frontend expects, and broadcasts them to hub subscribers.
+// StartEventBridge reads agent events, translates them into typed
+// WSServerMessage frames the frontend expects, and broadcasts them to
+// hub subscribers. It dual-emits the legacy "token"/"message" frames
+// alongside the new typed protocol so the existing frontend keeps
+// working while the reducer-based client is being rolled out.
 func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEvent) {
 	var buf strings.Builder
 	msgCounter := 0
 
+	// Per-turn state. Reset on every EventMessageStart.
+	stopReason := ""
+	inputTokens := 0
+	outputTokens := 0
+	emittedTools := make(map[string]bool)
+
+	broadcast := func(payload map[string]any) {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return
+		}
+		h.hub.Broadcast(cardID, data)
+	}
+
 	for ev := range events {
-		// Capture session ID on first message_start.
-		if ev.Type == agent.EventMessageStart && ev.SessionID != "" {
-			if _, err := h.cardSvc.SetSessionID(cardID, ev.SessionID); err != nil {
-				log.Printf("ws: SetSessionID error for card %s: %v", cardID, err)
+		switch ev.Type {
+		case agent.EventMessageStart:
+			// Capture session id (if present) before resetting state.
+			if ev.SessionID != "" {
+				if _, err := h.cardSvc.SetSessionID(cardID, ev.SessionID); err != nil {
+					log.Printf("ws: SetSessionID error for card %s: %v", cardID, err)
+				}
 			}
 			buf.Reset()
-		}
+			stopReason = ""
+			inputTokens = 0
+			outputTokens = 0
+			emittedTools = make(map[string]bool)
 
-		switch ev.Type {
+			broadcast(map[string]any{
+				"type":      "turn_start",
+				"sessionId": ev.SessionID,
+			})
+
 		case agent.EventTextDelta:
-			// Stream each text chunk as a "token" message.
+			// Legacy path: accumulate the assistant snapshot and emit
+			// a token frame for backward compat with the pre-reducer
+			// frontend. Review-signal detection stays on this path
+			// because the snapshot contains the complete text.
 			payload, _ := json.Marshal(map[string]string{
 				"type":    "token",
 				"content": ev.Text,
@@ -156,7 +186,6 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			h.hub.Broadcast(cardID, payload)
 			buf.WriteString(ev.Text)
 
-			// Detect review signal.
 			if strings.Contains(ev.Text, "READY_FOR_REVIEW") {
 				if _, err := h.cardSvc.MoveToReview(cardID); err != nil {
 					log.Printf("ws: MoveToReview error for card %s: %v", cardID, err)
@@ -166,18 +195,123 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 				}
 			}
 
+		case agent.EventPartialTextStart:
+			broadcast(map[string]any{
+				"type":  "block_start",
+				"index": ev.Index,
+				"kind":  "text",
+			})
+
+		case agent.EventThinkingStart:
+			broadcast(map[string]any{
+				"type":  "block_start",
+				"index": ev.Index,
+				"kind":  "thinking",
+			})
+
+		case agent.EventToolUseStart:
+			// Tool-use blocks arrive from BOTH the stream_event
+			// content_block_start path and the assistant snapshot
+			// fallback. Dedupe by tool id within a turn so the
+			// frontend only sees one block_start per tool call.
+			if ev.ToolID != "" && emittedTools[ev.ToolID] {
+				continue
+			}
+			if ev.ToolID != "" {
+				emittedTools[ev.ToolID] = true
+			}
+			broadcast(map[string]any{
+				"type":     "block_start",
+				"index":    ev.Index,
+				"kind":     "tool_use",
+				"toolId":   ev.ToolID,
+				"toolName": ev.ToolName,
+			})
+
+		case agent.EventPartialText:
+			broadcast(map[string]any{
+				"type":  "block_delta",
+				"index": ev.Index,
+				"text":  ev.Text,
+			})
+
+		case agent.EventThinkingDelta:
+			broadcast(map[string]any{
+				"type":     "block_delta",
+				"index":    ev.Index,
+				"thinking": ev.Thinking,
+			})
+
+		case agent.EventToolInputDelta:
+			broadcast(map[string]any{
+				"type":        "block_delta",
+				"index":       ev.Index,
+				"partialJson": ev.PartialJSON,
+			})
+
+		case agent.EventContentBlockStop:
+			broadcast(map[string]any{
+				"type":  "block_stop",
+				"index": ev.Index,
+			})
+
+		case agent.EventMessageDelta:
+			// Stash per-turn metrics; surfaced on turn_end. No
+			// standalone frame — the frontend reducer correlates
+			// these to the turn, not to any individual block.
+			if ev.StopReason != "" {
+				stopReason = ev.StopReason
+			}
+			if ev.InputTokens != 0 {
+				inputTokens = ev.InputTokens
+			}
+			if ev.OutputTokens != 0 {
+				outputTokens = ev.OutputTokens
+			}
+
+		case agent.EventToolResult:
+			broadcast(map[string]any{
+				"type":      "tool_result",
+				"toolUseId": ev.ToolUseID,
+				"content":   ev.ToolResult,
+				"isError":   ev.IsError,
+			})
+
 		case agent.EventMessageStop:
-			// Emit the completed assistant message.
+			// Legacy: emit the completed assistant message first so
+			// sequential readers see the full text before the turn
+			// boundary frame.
 			msgCounter++
+			suffix := cardID
+			if len(suffix) > 8 {
+				suffix = cardID[:8]
+			}
 			payload, _ := json.Marshal(map[string]any{
 				"type":      "message",
 				"role":      "assistant",
 				"content":   buf.String(),
-				"id":        fmt.Sprintf("msg-%s-%d", cardID[:8], msgCounter),
+				"id":        fmt.Sprintf("msg-%s-%d", suffix, msgCounter),
 				"timestamp": time.Now().UnixMilli(),
 			})
 			h.hub.Broadcast(cardID, payload)
 			buf.Reset()
+
+			// The result envelope carries its own cumulative metrics —
+			// prefer them over the last EventMessageDelta when present.
+			if ev.InputTokens != 0 {
+				inputTokens = ev.InputTokens
+			}
+			if ev.OutputTokens != 0 {
+				outputTokens = ev.OutputTokens
+			}
+			broadcast(map[string]any{
+				"type":         "turn_end",
+				"durationMs":   ev.DurationMS,
+				"costUsd":      ev.CostUSD,
+				"inputTokens":  inputTokens,
+				"outputTokens": outputTokens,
+				"stopReason":   stopReason,
+			})
 		}
 	}
 }
