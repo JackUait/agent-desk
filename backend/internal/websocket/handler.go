@@ -3,11 +3,9 @@ package websocket
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
@@ -133,13 +131,8 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // StartEventBridge reads agent events, translates them into typed
 // WSServerMessage frames the frontend expects, and broadcasts them to
-// hub subscribers. It dual-emits the legacy "token"/"message" frames
-// alongside the new typed protocol so the existing frontend keeps
-// working while the reducer-based client is being rolled out.
+// hub subscribers.
 func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEvent) {
-	var buf strings.Builder
-	msgCounter := 0
-
 	// Per-turn state. Reset on every EventMessageStart.
 	stopReason := ""
 	inputTokens := 0
@@ -163,7 +156,6 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 					log.Printf("ws: SetSessionID error for card %s: %v", cardID, err)
 				}
 			}
-			buf.Reset()
 			stopReason = ""
 			inputTokens = 0
 			outputTokens = 0
@@ -175,17 +167,10 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			})
 
 		case agent.EventTextDelta:
-			// Legacy path: accumulate the assistant snapshot and emit
-			// a token frame for backward compat with the pre-reducer
-			// frontend. Review-signal detection stays on this path
-			// because the snapshot contains the complete text.
-			payload, _ := json.Marshal(map[string]string{
-				"type":    "token",
-				"content": ev.Text,
-			})
-			h.hub.Broadcast(cardID, payload)
-			buf.WriteString(ev.Text)
-
+			// Assistant-snapshot text. The typed frame protocol carries
+			// the streaming text via partial_text events; this branch
+			// exists solely to scan the completed snapshot for the
+			// review signal that auto-moves the card.
 			if strings.Contains(ev.Text, "READY_FOR_REVIEW") {
 				if _, err := h.cardSvc.MoveToReview(cardID); err != nil {
 					log.Printf("ws: MoveToReview error for card %s: %v", cardID, err)
@@ -278,24 +263,6 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			})
 
 		case agent.EventMessageStop:
-			// Legacy: emit the completed assistant message first so
-			// sequential readers see the full text before the turn
-			// boundary frame.
-			msgCounter++
-			suffix := cardID
-			if len(suffix) > 8 {
-				suffix = cardID[:8]
-			}
-			payload, _ := json.Marshal(map[string]any{
-				"type":      "message",
-				"role":      "assistant",
-				"content":   buf.String(),
-				"id":        fmt.Sprintf("msg-%s-%d", suffix, msgCounter),
-				"timestamp": time.Now().UnixMilli(),
-			})
-			h.hub.Broadcast(cardID, payload)
-			buf.Reset()
-
 			// The result envelope carries its own cumulative metrics —
 			// prefer them over the last EventMessageDelta when present.
 			if ev.InputTokens != 0 {

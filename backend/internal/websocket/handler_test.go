@@ -230,29 +230,21 @@ func TestEventBridge_EmitsBlockStartBlockDeltaBlockStop_ForPartialText(t *testin
 	}
 }
 
-func TestEventBridge_LegacyTokenAndMessageStillEmit(t *testing.T) {
-	cardID, frames := collectBridgeFrames(t, []agent.StreamEvent{
+func TestEventBridge_LegacyFramesNotEmitted(t *testing.T) {
+	_, frames := collectBridgeFrames(t, []agent.StreamEvent{
 		{Type: agent.EventMessageStart, SessionID: "s"},
 		{Type: agent.EventTextDelta, Text: "Hello"},
 		{Type: agent.EventMessageStop, Text: "Hello"},
 	})
-	_ = cardID
 	got := frameTypes(frames)
-	want := []string{"turn_start", "token", "message", "turn_end"}
+	want := []string{"turn_start", "turn_end"}
 	if !equalStrings(got, want) {
 		t.Fatalf("frame type sequence mismatch\nwant: %v\n got: %v", want, got)
 	}
-	if frames[1]["content"] != "Hello" {
-		t.Fatalf("expected token content Hello, got %v", frames[1]["content"])
-	}
-	if frames[2]["role"] != "assistant" || frames[2]["content"] != "Hello" {
-		t.Fatalf("message frame malformed: %+v", frames[2])
-	}
-	if id, ok := frames[2]["id"].(string); !ok || !strings.HasPrefix(id, "msg-") {
-		t.Fatalf("expected id to start with msg-, got %v", frames[2]["id"])
-	}
-	if ts, ok := frames[2]["timestamp"].(float64); !ok || ts <= 0 {
-		t.Fatalf("expected positive timestamp, got %v", frames[2]["timestamp"])
+	for _, f := range frames {
+		if ty, _ := f["type"].(string); ty == "token" || ty == "message" {
+			t.Fatalf("legacy frame %q should no longer be emitted: %+v", ty, f)
+		}
 	}
 }
 
@@ -343,11 +335,11 @@ func TestEventBridge_EmitsTurnEnd_WithMetrics(t *testing.T) {
 		{Type: agent.EventMessageStop, Text: "done", DurationMS: 3245, CostUSD: 0.18, InputTokens: 6, OutputTokens: 10},
 	})
 	got := frameTypes(frames)
-	want := []string{"turn_start", "message", "turn_end"}
+	want := []string{"turn_start", "turn_end"}
 	if !equalStrings(got, want) {
-		t.Fatalf("frame type sequence mismatch (no message_delta frame expected)\nwant: %v\n got: %v", want, got)
+		t.Fatalf("frame type sequence mismatch (no legacy message frame expected)\nwant: %v\n got: %v", want, got)
 	}
-	te := frames[2]
+	te := frames[1]
 	if te["durationMs"].(float64) != 3245 {
 		t.Fatalf("durationMs mismatch: %v", te["durationMs"])
 	}
