@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 )
 
@@ -18,6 +19,14 @@ func newHandler() *card.Handler {
 	agentMgr := agent.NewManager("echo")
 	worktreeSvc := worktree.NewService("/tmp", "/tmp/worktrees")
 	return card.NewHandler(svc, agentMgr, worktreeSvc)
+}
+
+func newHandlerWithSvc() (*card.Handler, *card.Service) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	agentMgr := agent.NewManager("echo")
+	worktreeSvc := worktree.NewService("/tmp", "/tmp/worktrees")
+	return card.NewHandler(svc, agentMgr, worktreeSvc), svc
 }
 
 func TestCreateCard(t *testing.T) {
@@ -134,6 +143,69 @@ func TestDeleteCard(t *testing.T) {
 	h.GetCard(rec3, req3)
 	if rec3.Code != http.StatusNotFound {
 		t.Errorf("expected 404 after delete, got %d", rec3.Code)
+	}
+}
+
+func TestListMessages_EmptyArray_ForNewCard(t *testing.T) {
+	h, svc := newHandlerWithSvc()
+	c := svc.CreateCard("msg card")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cards/"+c.ID+"/messages", nil)
+	req.SetPathValue("id", c.ID)
+	rec := httptest.NewRecorder()
+	h.ListMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := strings.TrimSpace(rec.Body.String())
+	if body != "[]" {
+		t.Fatalf("expected body %q, got %q", "[]", body)
+	}
+}
+
+func TestListMessages_ReturnsPersistedMessages(t *testing.T) {
+	h, svc := newHandlerWithSvc()
+	c := svc.CreateCard("msg card")
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m2", Role: "assistant", Content: "hello", Timestamp: 2}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cards/"+c.ID+"/messages", nil)
+	req.SetPathValue("id", c.ID)
+	rec := httptest.NewRecorder()
+	h.ListMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var msgs []domain.Message
+	if err := json.NewDecoder(rec.Body).Decode(&msgs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	if msgs[0].ID != "m1" || msgs[0].Role != "user" || msgs[0].Content != "hi" {
+		t.Fatalf("first message mismatch: %+v", msgs[0])
+	}
+	if msgs[1].ID != "m2" || msgs[1].Role != "assistant" || msgs[1].Content != "hello" {
+		t.Fatalf("second message mismatch: %+v", msgs[1])
+	}
+}
+
+func TestListMessages_404ForUnknownCard(t *testing.T) {
+	h := newHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/cards/ghost/messages", nil)
+	req.SetPathValue("id", "ghost")
+	rec := httptest.NewRecorder()
+	h.ListMessages(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
 	}
 }
 

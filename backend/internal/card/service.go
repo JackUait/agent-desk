@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
 type Service struct {
@@ -170,6 +171,27 @@ func (s *Service) SetModel(id, model string) (Card, error) {
 	c.Model = model
 	s.store.Update(c)
 	return c, nil
+}
+
+// AppendMessage persists a message on a card.
+func (s *Service) AppendMessage(cardID string, msg domain.Message) error {
+	if !s.store.AppendMessage(cardID, msg) {
+		return fmt.Errorf("card %q not found", cardID)
+	}
+	return nil
+}
+
+// ListMessages returns all persisted messages for a card in chronological
+// order. Returns an empty (non-nil) slice when the card has no messages yet.
+func (s *Service) ListMessages(cardID string) ([]domain.Message, error) {
+	msgs, ok := s.store.ListMessages(cardID)
+	if !ok {
+		return nil, fmt.Errorf("card %q not found", cardID)
+	}
+	if msgs == nil {
+		msgs = []domain.Message{}
+	}
+	return msgs, nil
 }
 
 // SetSessionID sets the agent session ID on a card.

@@ -3,12 +3,15 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 	gowebsocket "nhooyr.io/websocket"
 )
@@ -114,6 +117,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				h.broadcastCard(cardID, updated)
 			}
+			if err := h.cardSvc.AppendMessage(cardID, domain.Message{
+				ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+				Role:      "user",
+				Content:   msg.Content,
+				Timestamp: time.Now().Unix(),
+			}); err != nil {
+				log.Printf("ws: AppendMessage (user) for card %s: %v", cardID, err)
+			}
 			sendToAgent(msg.Content)
 
 		case "start":
@@ -191,6 +202,16 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 				} else {
 					c, _ := h.cardSvc.GetCard(cardID)
 					h.broadcastCard(cardID, c)
+				}
+			}
+			if ev.Text != "" {
+				if err := h.cardSvc.AppendMessage(cardID, domain.Message{
+					ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+					Role:      "assistant",
+					Content:   ev.Text,
+					Timestamp: time.Now().Unix(),
+				}); err != nil {
+					log.Printf("ws: AppendMessage (assistant) for card %s: %v", cardID, err)
 				}
 			}
 

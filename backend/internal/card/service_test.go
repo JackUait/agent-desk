@@ -3,6 +3,8 @@ package card
 import (
 	"strings"
 	"testing"
+
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
 func newTestService() *Service {
@@ -354,5 +356,59 @@ func TestUpdateFields_notFound(t *testing.T) {
 	_, err := svc.UpdateFields("ghost", map[string]any{"title": "x"})
 	if err == nil {
 		t.Fatal("expected error for missing card")
+	}
+}
+
+// --- Messages ---
+
+func TestService_AppendMessage_ErrorForUnknownCard(t *testing.T) {
+	svc := newTestService()
+	err := svc.AppendMessage("ghost", domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	if err == nil {
+		t.Fatal("expected error for missing card")
+	}
+}
+
+func TestService_ListMessages_ErrorForUnknownCard(t *testing.T) {
+	svc := newTestService()
+	_, err := svc.ListMessages("ghost")
+	if err == nil {
+		t.Fatal("expected error for missing card")
+	}
+}
+
+func TestService_ListMessages_ReturnsEmptySliceNotNil_ForNewCard(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("x")
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msgs == nil {
+		t.Fatal("expected non-nil empty slice")
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected 0 messages, got %d", len(msgs))
+	}
+}
+
+func TestService_AppendMessage_ThenListMessages(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("x")
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m2", Role: "assistant", Content: "hello", Timestamp: 1}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	if msgs[0].Role != "user" || msgs[1].Role != "assistant" {
+		t.Fatalf("messages out of order: %+v", msgs)
 	}
 }

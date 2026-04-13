@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 	wsinternal "github.com/jackuait/agent-desk/backend/internal/websocket"
 	gowebsocket "nhooyr.io/websocket"
 )
@@ -691,6 +692,133 @@ func TestHandler_StartFrame_IgnoresClientModelField(t *testing.T) {
 	}
 
 	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestHandler_MessageFrame_PersistsUserMessage(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hello",
+		"model":   "claude-sonnet-4-6",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if inv := waitForSpyArgv(t, argvFile, 2*time.Second); len(inv) == 0 {
+		t.Fatal("expected spawn to complete")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var msgs []domain.Message
+	for time.Now().Before(deadline) {
+		got, err := svc.ListMessages(cardID)
+		if err != nil {
+			t.Fatalf("ListMessages: %v", err)
+		}
+		if len(got) >= 1 {
+			msgs = got
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(msgs) < 1 {
+		t.Fatalf("expected at least 1 persisted message, got %d", len(msgs))
+	}
+	if msgs[0].Role != "user" {
+		t.Fatalf("expected first message role=user, got %q", msgs[0].Role)
+	}
+	if msgs[0].Content != "hello" {
+		t.Fatalf("expected first message content=hello, got %q", msgs[0].Content)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("bridge persist")
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager("false")
+	h := wsinternal.NewHandler(hub, manager, svc)
+
+	ch := make(chan []byte, 256)
+	hub.Subscribe(c.ID, ch)
+	t.Cleanup(func() { hub.Unsubscribe(c.ID, ch) })
+
+	evCh := make(chan agent.StreamEvent, 4)
+	evCh <- agent.StreamEvent{Type: agent.EventMessageStart, SessionID: "s"}
+	evCh <- agent.StreamEvent{Type: agent.EventTextDelta, Text: "hello back"}
+	close(evCh)
+
+	done := make(chan struct{})
+	go func() {
+		h.StartEventBridge(c.ID, evCh)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bridge hang")
+	}
+
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 assistant message, got %d", len(msgs))
+	}
+	if msgs[0].Role != "assistant" {
+		t.Fatalf("expected role=assistant, got %q", msgs[0].Role)
+	}
+	if msgs[0].Content != "hello back" {
+		t.Fatalf("expected content=%q, got %q", "hello back", msgs[0].Content)
+	}
+}
+
+func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("bridge empty")
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager("false")
+	h := wsinternal.NewHandler(hub, manager, svc)
+
+	ch := make(chan []byte, 256)
+	hub.Subscribe(c.ID, ch)
+	t.Cleanup(func() { hub.Unsubscribe(c.ID, ch) })
+
+	evCh := make(chan agent.StreamEvent, 4)
+	evCh <- agent.StreamEvent{Type: agent.EventMessageStart, SessionID: "s"}
+	evCh <- agent.StreamEvent{Type: agent.EventTextDelta, Text: ""}
+	close(evCh)
+
+	done := make(chan struct{})
+	go func() {
+		h.StartEventBridge(c.ID, evCh)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bridge hang")
+	}
+
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected 0 persisted messages for empty text delta, got %d", len(msgs))
+	}
 }
 
 func TestHandler_Returns404ForUnknownCard(t *testing.T) {

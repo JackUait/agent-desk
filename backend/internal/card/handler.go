@@ -92,6 +92,16 @@ func (h *Handler) MergeCard(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusOK, c)
 }
 
+func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	msgs, err := h.svc.ListMessages(id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, msgs)
+}
+
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/cards", h.CreateCard)
 	mux.HandleFunc("GET /api/cards", h.ListCards)
@@ -99,4 +109,5 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/cards/{id}", h.UpdateCard)
 	mux.HandleFunc("DELETE /api/cards/{id}", h.DeleteCard)
 	mux.HandleFunc("POST /api/cards/{id}/merge", h.MergeCard)
+	mux.HandleFunc("GET /api/cards/{id}/messages", h.ListMessages)
 }

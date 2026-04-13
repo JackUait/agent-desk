@@ -6,16 +6,20 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
 type Store struct {
-	mu    sync.RWMutex
-	cards map[string]Card
+	mu       sync.RWMutex
+	cards    map[string]Card
+	messages map[string][]domain.Message
 }
 
 func NewStore() *Store {
 	return &Store{
-		cards: make(map[string]Card),
+		cards:    make(map[string]Card),
+		messages: make(map[string][]domain.Message),
 	}
 }
 
@@ -75,7 +79,29 @@ func (s *Store) Delete(id string) bool {
 		return false
 	}
 	delete(s.cards, id)
+	delete(s.messages, id)
 	return true
+}
+
+func (s *Store) AppendMessage(cardID string, msg domain.Message) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.cards[cardID]; !ok {
+		return false
+	}
+	s.messages[cardID] = append(s.messages[cardID], msg)
+	return true
+}
+
+func (s *Store) ListMessages(cardID string) ([]domain.Message, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.cards[cardID]; !ok {
+		return nil, false
+	}
+	out := make([]domain.Message, len(s.messages[cardID]))
+	copy(out, s.messages[cardID])
+	return out, true
 }
 
 func newID() string {
