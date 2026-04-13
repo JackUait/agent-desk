@@ -1,5 +1,6 @@
 export { ChatPanel } from "./ChatPanel";
 export { useModels } from "./useModels";
+export { ModelChooser } from "./ModelChooser";
 export { ThinkingBlock } from "./ThinkingBlock";
 export { ToolUseBlock } from "./ToolUseBlock";
 export { TextBlock } from "./TextBlock";
