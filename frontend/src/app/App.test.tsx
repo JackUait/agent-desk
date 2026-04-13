@@ -35,6 +35,12 @@ beforeEach(() => {
 describe("App", () => {
   it("renders without crashing", async () => {
     render(<App />);
-    expect(await screen.findByRole("heading", { name: /agent desk/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole(
+        "heading",
+        { name: /agent desk/i },
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
   });
 });

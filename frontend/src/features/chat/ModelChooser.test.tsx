@@ -11,24 +11,25 @@ const MODELS: Model[] = [
 ];
 
 describe("ModelChooser", () => {
-  it("renders one option per model", () => {
+  it("renders one option per model", async () => {
+    const user = userEvent.setup();
     render(
       <ModelChooser models={MODELS} value="claude-opus-4-6" onChange={() => {}} />,
     );
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.options).toHaveLength(3);
-    expect(select.options[0].value).toBe("claude-opus-4-6");
-    expect(select.options[0].textContent).toBe("Opus 4.6");
-    expect(select.options[1].value).toBe("claude-sonnet-4-6");
-    expect(select.options[2].value).toBe("claude-haiku-4-5");
+    await user.click(screen.getByTestId("model-chooser"));
+    const options = screen.getAllByRole("option");
+    expect(options).toHaveLength(3);
+    expect(options[0]).toHaveTextContent("Opus 4.6");
+    expect(options[1]).toHaveTextContent("Sonnet 4.6");
+    expect(options[2]).toHaveTextContent("Haiku 4.5");
   });
 
   it("reflects the value prop as the selected option", () => {
     render(
       <ModelChooser models={MODELS} value="claude-sonnet-4-6" onChange={() => {}} />,
     );
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-sonnet-4-6");
+    // The trigger button displays the label of the currently selected model.
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
   });
 
   it("calls onChange with the newly selected id", async () => {
@@ -37,8 +38,11 @@ describe("ModelChooser", () => {
     render(
       <ModelChooser models={MODELS} value="claude-opus-4-6" onChange={onChange} />,
     );
-    const select = screen.getByTestId("model-chooser");
-    await user.selectOptions(select, "claude-haiku-4-5");
+    await user.click(screen.getByTestId("model-chooser"));
+    const options = await screen.findAllByRole("option");
+    const haiku = options.find((o) => o.textContent?.includes("Haiku 4.5"));
+    if (!haiku) throw new Error("Haiku 4.5 option not found");
+    await user.click(haiku);
     expect(onChange).toHaveBeenCalledWith("claude-haiku-4-5");
   });
 

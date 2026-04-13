@@ -7,6 +7,7 @@ describe("cn", () => {
   });
 
   it("drops falsy values", () => {
-    expect(cn("flex", false && "hidden", undefined, "gap-2")).toBe("flex gap-2");
+    const hidden: string | false = false;
+    expect(cn("flex", hidden && "hidden", undefined, "gap-2")).toBe("flex gap-2");
   });
 });

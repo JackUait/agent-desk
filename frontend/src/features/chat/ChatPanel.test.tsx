@@ -195,30 +195,37 @@ describe("ChatPanel", () => {
 
   // ---- Model chooser integration ----
 
+  async function selectModelByLabel(
+    user: ReturnType<typeof userEvent.setup>,
+    label: string,
+  ) {
+    await user.click(screen.getByTestId("model-chooser"));
+    const options = await screen.findAllByRole("option");
+    const target = options.find((o) => o.textContent?.includes(label));
+    if (!target) throw new Error(`Model option "${label}" not found`);
+    await user.click(target);
+  }
+
   it("initialises selectedModel from cardModel when non-empty", () => {
     renderPanel({ cardModel: "claude-sonnet-4-6" });
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-sonnet-4-6");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
   });
 
   it("falls back to localStorage when cardModel is empty", () => {
     window.localStorage.setItem("agentDesk.lastModel", "claude-haiku-4-5");
     renderPanel({ cardModel: "" });
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-haiku-4-5");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Haiku 4.5");
   });
 
   it("ignores a localStorage model that is not in the models list", () => {
     window.localStorage.setItem("agentDesk.lastModel", "claude-fake");
     renderPanel({ cardModel: "" });
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-opus-4-6");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Opus 4.6");
   });
 
   it("falls back to claude-opus-4-6 when cardModel empty and no localStorage", () => {
     renderPanel({ cardModel: "" });
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-opus-4-6");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Opus 4.6");
   });
 
   it("disables the model chooser while turnInFlight is true", () => {
@@ -234,8 +241,7 @@ describe("ChatPanel", () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     renderPanel({ onSend, cardModel: "claude-opus-4-6" });
-    const select = screen.getByTestId("model-chooser");
-    await user.selectOptions(select, "claude-haiku-4-5");
+    await selectModelByLabel(user, "Haiku 4.5");
     const input = screen.getByRole("textbox");
     await user.type(input, "hi");
     await user.keyboard("{Enter}");
@@ -246,8 +252,7 @@ describe("ChatPanel", () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     renderPanel({ onSend, cardModel: "claude-opus-4-6" });
-    const select = screen.getByTestId("model-chooser");
-    await user.selectOptions(select, "claude-sonnet-4-6");
+    await selectModelByLabel(user, "Sonnet 4.6");
     const input = screen.getByRole("textbox");
     await user.type(input, "hi");
     await user.keyboard("{Enter}");
@@ -267,7 +272,6 @@ describe("ChatPanel", () => {
         cardModel="claude-sonnet-4-6"
       />,
     );
-    const select = screen.getByTestId("model-chooser") as HTMLSelectElement;
-    expect(select.value).toBe("claude-sonnet-4-6");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
   });
 });
