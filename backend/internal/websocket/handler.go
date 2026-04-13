@@ -75,7 +75,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	sendToAgent := func(message string) {
 		c, _ = h.cardSvc.GetCard(cardID)
 		events := make(chan agent.StreamEvent, 64)
-		if sendErr := h.manager.Send(cardID, c.SessionID, message, events); sendErr != nil {
+		if sendErr := h.manager.Send(cardID, c.SessionID, c.Model, message, events); sendErr != nil {
 			log.Printf("ws: send error for card %s: %v", cardID, sendErr)
 			h.broadcastError(cardID, sendErr.Error())
 			return

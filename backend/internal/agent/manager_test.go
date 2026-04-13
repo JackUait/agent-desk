@@ -57,7 +57,7 @@ func TestManager_SendAndRead(t *testing.T) {
 	m := agent.NewManager(echoBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-1", "", "hello", events); err != nil {
+	if err := m.Send("card-1", "", "", "hello", events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -76,13 +76,13 @@ func TestManager_SendDuplicate(t *testing.T) {
 	m := agent.NewManager(hangBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-2", "", "hello", events); err != nil {
+	if err := m.Send("card-2", "", "", "hello", events); err != nil {
 		t.Fatalf("first Send: %v", err)
 	}
 
 	time.Sleep(20 * time.Millisecond)
 
-	err := m.Send("card-2", "", "hello", make(chan agent.StreamEvent, 8))
+	err := m.Send("card-2", "", "", "hello", make(chan agent.StreamEvent, 8))
 	if err == nil {
 		t.Error("expected error on duplicate Send, got nil")
 	}
@@ -98,7 +98,7 @@ func TestManager_Send_IncludesPartialMessagesFlag(t *testing.T) {
 	m := agent.NewManager(bin)
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-flag", "", "hello world", events); err != nil {
+	if err := m.Send("card-flag", "", "", "hello world", events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -158,12 +158,79 @@ func TestManager_Send_IncludesPartialMessagesFlag(t *testing.T) {
 	}
 }
 
+// TestManager_Send_WithModel verifies that a non-empty model is inserted
+// as --model <id> before the positional prompt.
+func TestManager_Send_WithModel(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	bin := spyBin(t, argvFile)
+
+	m := agent.NewManager(bin)
+	events := make(chan agent.StreamEvent, 8)
+
+	if err := m.Send("card-model", "", "claude-sonnet-4-6", "hello", events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	raw, err := os.ReadFile(argvFile)
+	if err != nil {
+		t.Fatalf("read argv file: %v", err)
+	}
+	argv := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+
+	// --model must appear followed by the model id, and the prompt must
+	// still be the final positional argument.
+	foundModel := false
+	for i, a := range argv {
+		if a == "--model" {
+			foundModel = true
+			if i+1 >= len(argv) || argv[i+1] != "claude-sonnet-4-6" {
+				t.Errorf("--model not followed by claude-sonnet-4-6; got %v", argv)
+			}
+			break
+		}
+	}
+	if !foundModel {
+		t.Errorf("argv missing --model; got %v", argv)
+	}
+	if argv[len(argv)-1] != "hello" {
+		t.Errorf("expected prompt 'hello' as final arg; got %v", argv)
+	}
+}
+
+// TestManager_Send_WithoutModel verifies that an empty model string
+// produces no --model flag in the argv.
+func TestManager_Send_WithoutModel(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	bin := spyBin(t, argvFile)
+
+	m := agent.NewManager(bin)
+	events := make(chan agent.StreamEvent, 8)
+
+	if err := m.Send("card-nomodel", "", "", "hello", events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	raw, err := os.ReadFile(argvFile)
+	if err != nil {
+		t.Fatalf("read argv file: %v", err)
+	}
+	for _, a := range strings.Split(strings.TrimRight(string(raw), "\n"), "\n") {
+		if a == "--model" {
+			t.Fatalf("did not expect --model in argv; got %s", raw)
+		}
+	}
+}
+
 // TestManager_IsRunning verifies a process is tracked while active.
 func TestManager_IsRunning(t *testing.T) {
 	m := agent.NewManager(hangBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-3", "", "hello", events); err != nil {
+	if err := m.Send("card-3", "", "", "hello", events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 

@@ -30,19 +30,10 @@ func NewManager(claudeBin string) *Manager {
 	}
 }
 
-// Send spawns a Claude CLI process in print mode for cardID, sends message as
-// the prompt, and streams parsed events to the events channel. If sessionID is
-// non-empty, --resume is used to continue the conversation. The channel is
-// closed when the process exits.
-func (m *Manager) Send(cardID string, sessionID string, message string, events chan<- StreamEvent) error {
-	m.mu.Lock()
-	if m.running[cardID] {
-		m.mu.Unlock()
-		return fmt.Errorf("agent: process already running for card %q", cardID)
-	}
-	m.running[cardID] = true
-	m.mu.Unlock()
-
+// buildArgs assembles the Claude CLI argv for a given session/model/message.
+// Non-empty sessionID appends --resume <id>; non-empty model appends
+// --model <id>. The prompt is always the final positional argument.
+func buildArgs(sessionID, model, message string) []string {
 	args := []string{
 		"-p",
 		"--verbose",
@@ -53,7 +44,28 @@ func (m *Manager) Send(cardID string, sessionID string, message string, events c
 	if sessionID != "" {
 		args = append(args, "--resume", sessionID)
 	}
+	if model != "" {
+		args = append(args, "--model", model)
+	}
 	args = append(args, message)
+	return args
+}
+
+// Send spawns a Claude CLI process in print mode for cardID, sends message as
+// the prompt, and streams parsed events to the events channel. If sessionID is
+// non-empty, --resume is used to continue the conversation. If model is
+// non-empty, --model <id> is added before the positional prompt. The channel
+// is closed when the process exits.
+func (m *Manager) Send(cardID string, sessionID string, model string, message string, events chan<- StreamEvent) error {
+	m.mu.Lock()
+	if m.running[cardID] {
+		m.mu.Unlock()
+		return fmt.Errorf("agent: process already running for card %q", cardID)
+	}
+	m.running[cardID] = true
+	m.mu.Unlock()
+
+	args := buildArgs(sessionID, model, message)
 
 	cmd := exec.Command(m.claudeBin, args...)
 
