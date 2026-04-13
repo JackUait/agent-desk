@@ -6,7 +6,8 @@ import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolUseBlock } from "./ToolUseBlock";
 import { TextBlock } from "./TextBlock";
 import { ModelChooser } from "./ModelChooser";
-import styles from "./ChatPanel.module.css";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface ChatPanelProps {
   userMessages: Message[];
@@ -67,20 +68,29 @@ function scrollSignature(userMessages: Message[], chatStream: ChatStreamState): 
 
 function TurnView({ turn, isLast }: { turn: ChatTurn; isLast: boolean }) {
   return (
-    <div className={styles.turn} data-testid="assistant-turn">
-      <div className={styles.turnBlocks}>{turn.blocks.map(renderBlock)}</div>
+    <div className="flex flex-col gap-2" data-testid="assistant-turn">
+      <div className="flex flex-col gap-2">{turn.blocks.map(renderBlock)}</div>
       {isLast && turn.status === "streaming" && (
-        <div className={styles.streamIndicator} data-testid="turn-streaming">
-          <span className={styles.streamDot} aria-hidden="true" />
-          <span className={styles.streamLabel}>streaming</span>
+        <div
+          className="inline-flex items-center gap-1.5 pt-0.5 font-mono text-[10px] tracking-[0.06em] lowercase text-[var(--stream-accent,#14b8a6)]"
+          data-testid="turn-streaming"
+        >
+          <span
+            className="size-1.5 rounded-full bg-[var(--stream-accent,#14b8a6)] animate-[chatStreamPulse_1s_ease-in-out_infinite]"
+            aria-hidden="true"
+          />
+          <span className="text-[var(--stream-accent,#14b8a6)]">streaming</span>
         </div>
       )}
       {turn.status === "done" && turn.metrics && (
-        <div className={styles.metrics} data-testid="turn-metrics">
+        <div
+          className="flex items-center gap-1.5 pt-1 font-mono text-[10px] tracking-[0.04em] text-text-muted"
+          data-testid="turn-metrics"
+        >
           <span>{formatDuration(turn.metrics.durationMs)}</span>
-          <span className={styles.metricSep}>·</span>
+          <span className="opacity-60">·</span>
           <span>{formatCost(turn.metrics.costUsd)}</span>
-          <span className={styles.metricSep}>·</span>
+          <span className="opacity-60">·</span>
           <span>{turn.metrics.outputTokens} tok</span>
         </div>
       )}
@@ -129,17 +139,27 @@ export function ChatPanel({
     setInput("");
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e as unknown as React.FormEvent);
+    }
+  }
+
   const zipLen = Math.max(userMessages.length, chatStream.turns.length);
   const lastTurnIndex = chatStream.turns.length - 1;
 
   return (
-    <div className={styles.panel} data-testid="chat-panel">
-      <div className={styles.messageList} data-testid="message-list">
+    <div className="flex h-full min-h-0 flex-col bg-bg-card" data-testid="chat-panel">
+      <div
+        className="flex flex-1 min-h-0 flex-col gap-3.5 overflow-y-auto px-4 py-4"
+        data-testid="message-list"
+      >
         {Array.from({ length: zipLen }, (_, i) => {
           const msg = userMessages[i];
           const turn = chatStream.turns[i];
           return (
-            <div key={`pair-${i}`} className={styles.pair}>
+            <div key={`pair-${i}`} className="flex flex-col gap-2.5">
               {msg && (
                 <ChatMessage
                   key={msg.id}
@@ -153,30 +173,34 @@ export function ChatPanel({
         })}
         <div ref={bottomRef} />
       </div>
-      <form className={styles.inputForm} onSubmit={handleSubmit}>
-        <input
-          className={styles.input}
-          type="text"
+      <form
+        className="border-t border-border-card bg-bg-card p-3 flex flex-col gap-2"
+        onSubmit={handleSubmit}
+      >
+        <Textarea
+          className="min-h-[44px] max-h-[180px] flex-1 resize-none"
           placeholder="Type a message..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
           disabled={readOnly}
           aria-label="Message input"
         />
-        <div className={styles.composerRow}>
+        <div className="flex items-end gap-2">
           <ModelChooser
             models={models}
             value={selectedModel}
             onChange={setSelectedModel}
             disabled={readOnly || chatStream.turnInFlight}
           />
-          <button
-            className={styles.sendButton}
+          <Button
             type="submit"
+            size="sm"
+            data-testid="send-button"
             disabled={readOnly || !input.trim()}
           >
             Send
-          </button>
+          </Button>
         </div>
       </form>
     </div>

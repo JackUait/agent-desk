@@ -1,5 +1,11 @@
 import type { Model } from "../../shared/types/domain";
-import styles from "./ModelChooser.module.css";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ModelChooserProps {
   models: Model[];
@@ -14,20 +20,23 @@ export function ModelChooser({
   onChange,
   disabled,
 }: ModelChooserProps) {
+  const selectedLabel = models.find((m) => m.id === value)?.label ?? value;
   return (
-    <select
-      data-testid="model-chooser"
-      className={styles.select}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      aria-label="Model"
-    >
-      {models.map((m) => (
-        <option key={m.id} value={m.id}>
-          {m.label}
-        </option>
-      ))}
-    </select>
+    <Select value={value} onValueChange={(v) => v !== null && onChange(v)} disabled={disabled}>
+      <SelectTrigger
+        data-testid="model-chooser"
+        aria-label="Model"
+        className="h-9 w-auto min-w-[140px] rounded-md border-border-card bg-bg-page text-sm text-text-primary"
+      >
+        <SelectValue>{selectedLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {models.map((m) => (
+          <SelectItem key={m.id} value={m.id}>
+            {m.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
