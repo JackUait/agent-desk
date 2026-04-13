@@ -43,6 +43,7 @@ const CARDS = [
     branchName: "",
     prUrl: "",
     createdAt: 1000,
+    model: "",
   },
 ];
 
@@ -84,6 +85,7 @@ describe("useBoard", () => {
       branchName: "",
       prUrl: "",
       createdAt: 2000,
+      model: "",
     };
     mockedApi.createCard.mockResolvedValue(newCard);
 

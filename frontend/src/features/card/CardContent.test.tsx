@@ -18,6 +18,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     branchName: "",
     prUrl: "",
     createdAt: 1000,
+    model: "",
     ...overrides,
   };
 }

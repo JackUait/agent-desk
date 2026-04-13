@@ -15,6 +15,7 @@ const mockCard: Card = {
   branchName: "",
   prUrl: "",
   createdAt: 1000,
+  model: "",
 };
 
 const mockBoard: Board = {

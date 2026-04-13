@@ -17,6 +17,7 @@ const cards: Record<string, Card> = {
     branchName: "",
     prUrl: "",
     createdAt: 1000,
+    model: "",
   },
   "card-2": {
     id: "card-2",
@@ -31,6 +32,7 @@ const cards: Record<string, Card> = {
     branchName: "",
     prUrl: "",
     createdAt: 1001,
+    model: "",
   },
 };
 

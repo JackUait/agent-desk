@@ -17,6 +17,7 @@ const card: Card = {
   branchName: "",
   prUrl: "",
   createdAt: 1000,
+  model: "",
 };
 
 describe("KanbanCard", () => {

@@ -25,6 +25,12 @@ export interface Card {
   branchName: string;
   prUrl: string;
   createdAt: number;
+  model: string;
+}
+
+export interface Model {
+  id: string;
+  label: string;
 }
 
 export interface Message {
@@ -35,7 +41,7 @@ export interface Message {
 }
 
 export type WSClientMessage =
-  | { type: "message"; content: string }
+  | { type: "message"; content: string; model?: string }
   | { type: "start" }
   | { type: "approve" }
   | { type: "merge" };
