@@ -1,6 +1,6 @@
 import type { Card, Column as ColumnType } from "../../shared/types/domain";
+import { Badge } from "@/components/ui/badge";
 import { KanbanCard } from "./KanbanCard";
-import styles from "./Column.module.css";
 
 interface ColumnProps {
   column: ColumnType;
@@ -13,12 +13,14 @@ interface ColumnProps {
 
 export function Column({ column, cards, enteringCards, exitingCards, workingCards, onCardClick }: ColumnProps) {
   return (
-    <section className={styles.column}>
-      <div className={styles.header}>
-        <h2 className={styles.title}>{column.title}</h2>
-        <span className={styles.count}>{column.cardIds.length}</span>
+    <section className="flex min-w-[280px] max-w-[320px] flex-col gap-3 rounded-lg bg-bg-hover p-3">
+      <div className="flex items-center justify-between px-1 pb-1">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          {column.title}
+        </h2>
+        <Badge variant="outline">{column.cardIds.length}</Badge>
       </div>
-      <div className={styles.cardList}>
+      <div className="flex flex-col gap-2">
         {column.cardIds.map((cardId) => {
           const card = cards[cardId];
           if (!card) return null;

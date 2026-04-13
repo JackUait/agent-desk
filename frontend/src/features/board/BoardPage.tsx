@@ -5,7 +5,6 @@ import { CardModal } from "../card";
 import { useCardSocket } from "../../shared/api/useCardSocket";
 import { useModels } from "../chat";
 import type { Card, Model } from "../../shared/types/domain";
-import styles from "./BoardPage.module.css";
 
 function CardModalWrapper({
   card,
@@ -103,14 +102,21 @@ export function BoardPage() {
   const selectedCard = selectedCardId ? cards[selectedCardId] : null;
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <h1 className={styles.title}>Agent Desk</h1>
-        <button className={styles.createBtn} type="button" onClick={handleNewCard}>
+    <div className="flex h-screen flex-col bg-bg-page">
+      <header className="flex items-center justify-between border-b border-border-card px-6 py-4">
+        <h1 className="text-xl font-semibold tracking-tight text-text-primary">Agent Desk</h1>
+        <button
+          className="cursor-pointer rounded-md bg-accent-blue px-3.5 py-1.5 text-sm font-medium text-white transition hover:opacity-85"
+          type="button"
+          onClick={handleNewCard}
+        >
           + New Card
         </button>
       </header>
-      <div className={styles.board} data-testid="board-container">
+      <div
+        className="flex flex-1 min-h-0 gap-4 overflow-x-auto p-6"
+        data-testid="board-container"
+      >
         {board.columns.map((column) => (
           <Column
             key={column.id}
