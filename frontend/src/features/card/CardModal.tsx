@@ -1,8 +1,9 @@
 import type { Card, Message, Model } from "../../shared/types/domain";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { ChatPanel } from "../chat";
 import type { ChatStreamState } from "../chat";
 import { CardContent } from "./CardContent";
-import styles from "./CardModal.module.css";
+import { Dialog } from "@/components/ui/dialog";
 
 interface CardModalProps {
   card: Card;
@@ -28,27 +29,35 @@ export function CardModal({
   onClose,
 }: CardModalProps) {
   return (
-    <div className={styles.overlay} data-testid="modal-overlay" onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.left}>
-          <CardContent
-            card={card}
-            onStart={onStart}
-            onApprove={onApprove}
-            onMerge={onMerge}
-          />
-        </div>
-        <div className={styles.right}>
-          <ChatPanel
-            userMessages={userMessages}
-            chatStream={chatStream}
-            onSend={onSend}
-            models={models}
-            cardModel={card.model}
-            readOnly={card.column === "done"}
-          />
-        </div>
-      </div>
-    </div>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Backdrop
+          data-testid="modal-overlay"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
+        />
+        <DialogPrimitive.Popup
+          className="fixed left-1/2 top-1/2 z-50 grid w-[min(1200px,94vw)] h-[min(820px,92vh)] -translate-x-1/2 -translate-y-1/2 grid-cols-[1fr_1fr] gap-0 overflow-hidden rounded-xl border border-border-card bg-bg-card p-0 shadow-2xl outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+        >
+          <div className="overflow-y-auto border-r border-border-card p-8">
+            <CardContent
+              card={card}
+              onStart={onStart}
+              onApprove={onApprove}
+              onMerge={onMerge}
+            />
+          </div>
+          <div className="flex min-h-0 flex-col">
+            <ChatPanel
+              userMessages={userMessages}
+              chatStream={chatStream}
+              onSend={onSend}
+              models={models}
+              cardModel={card.model}
+              readOnly={card.column === "done"}
+            />
+          </div>
+        </DialogPrimitive.Popup>
+      </DialogPrimitive.Portal>
+    </Dialog>
   );
 }

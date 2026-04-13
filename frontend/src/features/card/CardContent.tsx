@@ -1,5 +1,5 @@
 import type { Card } from "../../shared/types/domain";
-import styles from "./CardContent.module.css";
+import { Button } from "@/components/ui/button";
 
 interface CardContentProps {
   card: Card;
@@ -14,20 +14,26 @@ function formatColumn(column: string): string {
 
 export function CardContent({ card, onStart, onApprove, onMerge }: CardContentProps) {
   return (
-    <div className={styles.content} data-testid="card-content">
-      <div className={styles.meta}>
-        <span className={styles.badge}>{formatColumn(card.column)}</span>
-        <span className={styles.cardId}>{card.id.slice(0, 8)}</span>
+    <div className="flex flex-col gap-4 p-6 overflow-y-auto" data-testid="card-content">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium px-2 py-0.5 rounded bg-accent-blue-bg text-accent-blue">
+          {formatColumn(card.column)}
+        </span>
+        <span className="text-xs font-mono text-text-muted">{card.id.slice(0, 8)}</span>
       </div>
 
-      <h3 className={styles.title}>{card.title}</h3>
+      <h3 className="text-xl font-semibold leading-snug text-text-primary m-0">{card.title}</h3>
 
-      {card.description && <p className={styles.description}>{card.description}</p>}
+      {card.description && (
+        <p className="text-sm leading-relaxed text-text-secondary m-0">{card.description}</p>
+      )}
 
       {card.acceptanceCriteria.length > 0 && (
-        <div className={styles.section}>
-          <h4 className={styles.sectionTitle}>Acceptance Criteria</h4>
-          <ul className={styles.criteriaList}>
+        <div className="flex flex-col gap-1.5">
+          <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">
+            Acceptance Criteria
+          </h4>
+          <ul className="m-0 pl-[18px] text-[13px] leading-relaxed text-text-secondary">
             {card.acceptanceCriteria.map((c, i) => (
               <li key={i}>{c}</li>
             ))}
@@ -36,34 +42,44 @@ export function CardContent({ card, onStart, onApprove, onMerge }: CardContentPr
       )}
 
       {card.complexity && (
-        <div className={styles.section}>
-          <span className={styles.complexityTag}>{card.complexity}</span>
+        <div className="flex flex-col gap-1.5">
+          <span className="inline-block text-xs font-medium px-2 py-0.5 rounded bg-bg-hover text-text-secondary">
+            {card.complexity}
+          </span>
         </div>
       )}
 
       {card.relevantFiles.length > 0 && (
-        <div className={styles.section}>
-          <h4 className={styles.sectionTitle}>Files</h4>
-          <ul className={styles.fileList}>
+        <div className="flex flex-col gap-1.5">
+          <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">
+            Files
+          </h4>
+          <ul className="m-0 p-0 list-none">
             {card.relevantFiles.map((f, i) => (
-              <li key={i} className={styles.filePath}>{f}</li>
+              <li key={i} className="text-[13px] font-mono text-text-secondary">
+                {f}
+              </li>
             ))}
           </ul>
         </div>
       )}
 
       {card.worktreePath && (
-        <div className={styles.section}>
-          <h4 className={styles.sectionTitle}>Worktree</h4>
-          <span className={styles.filePath}>{card.worktreePath}</span>
+        <div className="flex flex-col gap-1.5">
+          <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">
+            Worktree
+          </h4>
+          <span className="text-[13px] font-mono text-text-secondary">{card.worktreePath}</span>
         </div>
       )}
 
       {card.prUrl && (
-        <div className={styles.section}>
-          <h4 className={styles.sectionTitle}>Pull Request</h4>
+        <div className="flex flex-col gap-1.5">
+          <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">
+            Pull Request
+          </h4>
           <a
-            className={styles.prLink}
+            className="text-[13px] text-accent-blue no-underline hover:underline"
             href={card.prUrl}
             target="_blank"
             rel="noopener noreferrer"
@@ -74,30 +90,26 @@ export function CardContent({ card, onStart, onApprove, onMerge }: CardContentPr
       )}
 
       {card.column === "backlog" && (
-        <div className={styles.actions}>
-          <button className={styles.actionBtn} type="button" onClick={onStart}>
+        <div className="flex gap-2 mt-2">
+          <Button variant="default" size="sm" type="button" onClick={onStart}>
             Start Development
-          </button>
+          </Button>
         </div>
       )}
 
       {card.column === "review" && !card.prUrl && (
-        <div className={styles.actions}>
-          <button className={styles.actionBtn} type="button" onClick={onApprove}>
+        <div className="flex gap-2 mt-2">
+          <Button variant="secondary" size="sm" type="button" onClick={onApprove}>
             Approve
-          </button>
+          </Button>
         </div>
       )}
 
       {card.column === "review" && card.prUrl && (
-        <div className={styles.actions}>
-          <button
-            className={`${styles.actionBtn} ${styles.mergeBtn}`}
-            type="button"
-            onClick={onMerge}
-          >
+        <div className="flex gap-2 mt-2">
+          <Button variant="outline" size="sm" type="button" onClick={onMerge}>
             Merge
-          </button>
+          </Button>
         </div>
       )}
     </div>
