@@ -47,6 +47,7 @@ func (m *Manager) Send(cardID string, sessionID string, message string, events c
 		"-p",
 		"--verbose",
 		"--output-format", "stream-json",
+		"--include-partial-messages",
 		"--append-system-prompt", agentSystemPrompt,
 	}
 	if sessionID != "" {
