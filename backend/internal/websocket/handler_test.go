@@ -3,8 +3,11 @@ package websocket_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +17,93 @@ import (
 	wsinternal "github.com/jackuait/agent-desk/backend/internal/websocket"
 	gowebsocket "nhooyr.io/websocket"
 )
+
+// spyClaudeBin writes a tiny shell script that appends each invocation's
+// argv to argvFile (one arg per line, invocation-separated by a blank line)
+// and exits immediately with no output. Used by slice-B4 tests to observe
+// the --model flag passed to agent.Manager.Send without mocking it.
+func spyClaudeBin(t *testing.T, argvFile string) string {
+	t.Helper()
+	script := fmt.Sprintf("#!/bin/sh\n{ printf '%%s\\n' \"$@\"; printf -- '---\\n'; } >> %q\nexit 0\n", argvFile)
+	path := filepath.Join(t.TempDir(), "spy-claude.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("spyClaudeBin write: %v", err)
+	}
+	return path
+}
+
+// readSpyArgv reads the argv capture file produced by spyClaudeBin and
+// returns the individual invocations (each a []string).
+func readSpyArgv(t *testing.T, path string) [][]string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatalf("read argv file: %v", err)
+	}
+	var invocations [][]string
+	var current []string
+	for _, line := range strings.Split(strings.TrimRight(string(raw), "\n"), "\n") {
+		if line == "---" {
+			invocations = append(invocations, current)
+			current = nil
+			continue
+		}
+		current = append(current, line)
+	}
+	if len(current) > 0 {
+		invocations = append(invocations, current)
+	}
+	return invocations
+}
+
+// buildServerWithSpy wires the ws handler against a spy Claude binary so
+// tests can assert on the argv the spawned "agent" received.
+func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, svc *card.Service, cardID string) {
+	t.Helper()
+
+	store := card.NewStore()
+	svc = card.NewService(store)
+	c := svc.CreateCard("model test")
+
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager(spyClaudeBin(t, argvFile))
+	h := wsinternal.NewHandler(hub, manager, svc)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, svc, c.ID
+}
+
+// argvContainsModel returns true if the argv has "--model id" as adjacent entries.
+func argvContainsModel(argv []string, id string) bool {
+	for i, a := range argv {
+		if a == "--model" && i+1 < len(argv) && argv[i+1] == id {
+			return true
+		}
+	}
+	return false
+}
+
+// waitForSpyArgv polls until the spy binary has recorded at least one
+// invocation or the deadline elapses.
+func waitForSpyArgv(t *testing.T, path string, timeout time.Duration) [][]string {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		inv := readSpyArgv(t, path)
+		if len(inv) > 0 {
+			return inv
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return nil
+}
 
 // buildServer wires up a test HTTP server with the WebSocket handler.
 func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinternal.Hub) {
@@ -422,6 +512,185 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// --- Slice B4: model-on-message-frame tests ---
+
+func dialWS(t *testing.T, srv *httptest.Server, cardID string) (*gowebsocket.Conn, context.Context, context.CancelFunc) {
+	t.Helper()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/cards/" + cardID + "/ws"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	conn, _, err := gowebsocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		cancel()
+		t.Fatalf("dial: %v", err)
+	}
+	// Give the handler a beat to set up the subscription.
+	time.Sleep(20 * time.Millisecond)
+	return conn, ctx, cancel
+}
+
+func TestHandler_MessageFrame_ValidModel_SetsModelAndSpawnsWithFlag(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "claude-sonnet-4-6",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsModel(inv[0], "claude-sonnet-4-6") {
+		t.Fatalf("expected --model claude-sonnet-4-6 in argv; got %v", inv[0])
+	}
+
+	// Model must have been persisted via SetModel.
+	got, err := svc.GetCard(cardID)
+	if err != nil {
+		t.Fatalf("GetCard: %v", err)
+	}
+	if got.Model != "claude-sonnet-4-6" {
+		t.Fatalf("expected persisted model claude-sonnet-4-6, got %q", got.Model)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestHandler_MessageFrame_InvalidModel_BroadcastsErrorAndSkipsSpawn(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "bogus",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Expect an error frame back.
+	conn.SetReadLimit(1 << 20)
+	_, got, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var resp struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(got, &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if resp.Type != "error" {
+		t.Fatalf("expected type error, got %q", resp.Type)
+	}
+	if !strings.Contains(resp.Message, "unknown model: bogus") {
+		t.Fatalf("expected 'unknown model: bogus' in message, got %q", resp.Message)
+	}
+
+	// No spawn should have occurred.
+	time.Sleep(100 * time.Millisecond)
+	if inv := readSpyArgv(t, argvFile); len(inv) != 0 {
+		t.Fatalf("expected zero spawns, got %d: %v", len(inv), inv)
+	}
+
+	// Card model must NOT have been persisted.
+	got2, _ := svc.GetCard(cardID)
+	if got2.Model != "" {
+		t.Fatalf("expected empty card.Model, got %q", got2.Model)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestHandler_MessageFrame_NoModel_UsesCardPersistedModel(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set a model via the service so the handler must read it from the card.
+	if _, err := svc.SetModel(cardID, "claude-haiku-4-5"); err != nil {
+		t.Fatalf("pre-set model: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsModel(inv[0], "claude-haiku-4-5") {
+		t.Fatalf("expected --model claude-haiku-4-5 in argv; got %v", inv[0])
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestHandler_StartFrame_IgnoresClientModelField(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set haiku on the card so we can see that start spawns with the
+	// card's persisted model, not the "claude-sonnet-4-6" the client sends.
+	if _, err := svc.SetModel(cardID, "claude-haiku-4-5"); err != nil {
+		t.Fatalf("pre-set model: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":  "start",
+		"model": "claude-sonnet-4-6",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if argvContainsModel(inv[0], "claude-sonnet-4-6") {
+		t.Fatalf("start frame must not honour client model; got %v", inv[0])
+	}
+	if !argvContainsModel(inv[0], "claude-haiku-4-5") {
+		t.Fatalf("expected persisted --model claude-haiku-4-5 in argv; got %v", inv[0])
+	}
+
+	// Card model must remain the persisted value — start frame must not overwrite.
+	got, _ := svc.GetCard(cardID)
+	if got.Model != "claude-haiku-4-5" {
+		t.Fatalf("expected card model unchanged, got %q", got.Model)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
 func TestHandler_Returns404ForUnknownCard(t *testing.T) {

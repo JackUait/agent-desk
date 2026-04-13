@@ -93,6 +93,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		var msg struct {
 			Type    string `json:"type"`
 			Content string `json:"content"`
+			Model   string `json:"model,omitempty"`
 		}
 		if jsonErr := json.Unmarshal(data, &msg); jsonErr != nil {
 			continue
@@ -100,6 +101,19 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		switch msg.Type {
 		case "message":
+			if msg.Model != "" {
+				if !agent.IsAllowed(msg.Model) {
+					h.broadcastError(cardID, "unknown model: "+msg.Model)
+					break
+				}
+				updated, svcErr := h.cardSvc.SetModel(cardID, msg.Model)
+				if svcErr != nil {
+					log.Printf("ws: SetModel error for card %s: %v", cardID, svcErr)
+					h.broadcastError(cardID, svcErr.Error())
+					break
+				}
+				h.broadcastCard(cardID, updated)
+			}
 			sendToAgent(msg.Content)
 
 		case "start":
