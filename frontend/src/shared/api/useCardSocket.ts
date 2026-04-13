@@ -11,6 +11,7 @@ import {
   initialChatStreamState,
   type ChatStreamState,
 } from "../../features/chat/chatStream";
+import { api } from "./client";
 
 export interface UseCardSocketResult {
   userMessages: Message[];
@@ -41,6 +42,23 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listMessages(cardId).then(
+      (msgs) => {
+        if (cancelled) return;
+        setUserMessages(msgs.filter((m) => m.role === "user"));
+        dispatchStream({ type: "hydrate", messages: msgs });
+      },
+      () => {
+        // swallow — empty transcript is the existing default
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [cardId]);
 
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";

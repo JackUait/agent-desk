@@ -102,6 +102,26 @@ describe("api.mergeCard", () => {
   });
 });
 
+describe("api.listMessages", () => {
+  it("GETs /api/cards/:id/messages and returns an array of messages", async () => {
+    const messages = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "hello", timestamp: 2 },
+    ];
+    globalThis.fetch = mockFetch(200, messages);
+    const result = await api.listMessages("card-1");
+    expect(fetch).toHaveBeenCalledWith("/api/cards/card-1/messages", undefined);
+    expect(result).toEqual(messages);
+  });
+
+  it("returns an empty array for a card with no messages", async () => {
+    globalThis.fetch = mockFetch(200, []);
+    const result = await api.listMessages("card-empty");
+    expect(fetch).toHaveBeenCalledWith("/api/cards/card-empty/messages", undefined);
+    expect(result).toEqual([]);
+  });
+});
+
 describe("api.getBoard", () => {
   it("GETs /api/board and returns the board", async () => {
     globalThis.fetch = mockFetch(200, mockBoard);

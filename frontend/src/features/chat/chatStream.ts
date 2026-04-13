@@ -1,3 +1,5 @@
+import type { Message } from "../../shared/types/domain";
+
 export type ChatStreamFrame =
   | { type: "turn_start"; sessionId: string }
   | { type: "block_start"; index: number; kind: "text" }
@@ -64,6 +66,20 @@ export const initialChatStreamState: ChatStreamState = {
   turnInFlight: false,
 };
 
+export function buildChatStreamStateFromMessages(
+  messages: Message[],
+): ChatStreamState {
+  const turns: ChatTurn[] = [];
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    turns.push({
+      blocks: [{ kind: "text", index: 0, text: m.content, done: true }],
+      status: "done",
+    });
+  }
+  return { turns, turnInFlight: false };
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -113,9 +129,19 @@ const updateBlockByIndex = (
 
 export function chatStreamReducer(
   state: ChatStreamState,
-  frame: unknown,
+  action: unknown,
 ): ChatStreamState {
-  if (!isChatStreamFrame(frame)) return state;
+  if (
+    isObject(action) &&
+    action.type === "hydrate" &&
+    Array.isArray((action as { messages?: unknown }).messages)
+  ) {
+    return buildChatStreamStateFromMessages(
+      (action as { messages: Message[] }).messages,
+    );
+  }
+  if (!isChatStreamFrame(action)) return state;
+  const frame: ChatStreamFrame = action;
 
   switch (frame.type) {
     case "turn_start": {

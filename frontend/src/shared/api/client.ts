@@ -1,4 +1,4 @@
-import type { Board, Card } from "../types/domain";
+import type { Board, Card, Message } from "../types/domain";
 
 const BASE = "/api";
 
@@ -39,5 +39,9 @@ export const api = {
 
   getBoard(): Promise<Board> {
     return request<Board>("/board");
+  },
+
+  listMessages(id: string): Promise<Message[]> {
+    return request<Message[]>(`/cards/${id}/messages`);
   },
 };

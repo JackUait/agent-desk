@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useCardSocket } from "./useCardSocket";
+import { api } from "./client";
+import type { Message } from "../types/domain";
 
 class MockWebSocket {
   static OPEN = 1;
@@ -47,10 +49,12 @@ class MockWebSocket {
 beforeEach(() => {
   MockWebSocket.reset();
   vi.stubGlobal("WebSocket", MockWebSocket);
+  vi.spyOn(api, "listMessages").mockResolvedValue([]);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function getInstance() {
@@ -207,6 +211,59 @@ describe("useCardSocket", () => {
       getInstance().simulateMessage({ type: "error", message: "something went wrong" });
     });
     expect(result.current.error).toBe("something went wrong");
+  });
+
+  it("calls api.listMessages with the cardId on mount", () => {
+    const spy = vi
+      .spyOn(api, "listMessages")
+      .mockResolvedValue([]);
+    renderHook(() => useCardSocket("card-1"));
+    expect(spy).toHaveBeenCalledWith("card-1");
+  });
+
+  it("populates userMessages from persisted user messages on mount", async () => {
+    const persisted: Message[] = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "hello", timestamp: 2 },
+    ];
+    vi.spyOn(api, "listMessages").mockResolvedValue(persisted);
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.userMessages).toHaveLength(1);
+    });
+    expect(result.current.userMessages[0].role).toBe("user");
+    expect(result.current.userMessages[0].content).toBe("hi");
+  });
+
+  it("hydrates chatStream from persisted assistant messages on mount", async () => {
+    const persisted: Message[] = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "hello", timestamp: 2 },
+    ];
+    vi.spyOn(api, "listMessages").mockResolvedValue(persisted);
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.chatStream.turns).toHaveLength(1);
+    });
+    const turn = result.current.chatStream.turns[0];
+    expect(turn.status).toBe("done");
+    const block = turn.blocks[0];
+    expect(block.kind).toBe("text");
+    if (block.kind === "text") {
+      expect(block.text).toBe("hello");
+      expect(block.done).toBe(true);
+    }
+  });
+
+  it("swallows listMessages errors and keeps empty state", async () => {
+    vi.spyOn(api, "listMessages").mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.userMessages).toEqual([]);
+    });
+    expect(result.current.chatStream.turns).toEqual([]);
+    expect(result.current.status).toBe("connecting");
+    expect(result.current.error).toBeNull();
   });
 
   it("reports disconnected on close", () => {
