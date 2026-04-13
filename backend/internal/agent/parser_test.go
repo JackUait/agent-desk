@@ -6,8 +6,32 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 )
 
-func TestParseStreamEvent_TextDelta(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-123","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello "}}}`
+// The fixtures below are captured verbatim from
+//   claude -p --verbose --output-format stream-json "say hi in 3 words"
+// so the parser is tested against the real Claude CLI wire format.
+
+func TestParseStreamEvent_SystemInit_EmitsMessageStartWithSessionID(t *testing.T) {
+	// First line Claude CLI prints is an init system event carrying the
+	// session_id we must capture so subsequent --resume calls work.
+	line := `{"type":"system","subtype":"init","cwd":"/tmp","session_id":"3dfd476f-099e-47dc-8898-d02a7976a4f3","model":"claude-opus-4-6"}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Type != agent.EventMessageStart {
+		t.Errorf("expected EventMessageStart for system:init, got %q", ev.Type)
+	}
+	if ev.SessionID != "3dfd476f-099e-47dc-8898-d02a7976a4f3" {
+		t.Errorf("expected session id captured, got %q", ev.SessionID)
+	}
+}
+
+func TestParseStreamEvent_AssistantText_EmitsTextDelta(t *testing.T) {
+	// A type:assistant line carries a message.content array. For plain
+	// text responses each content item is {type:text, text:"..."}.
+	line := `{"type":"assistant","message":{"model":"claude-opus-4-6","id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"Hi there friend"}]},"session_id":"3dfd476f-099e-47dc-8898-d02a7976a4f3"}`
+
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -15,41 +39,19 @@ func TestParseStreamEvent_TextDelta(t *testing.T) {
 	if ev.Type != agent.EventTextDelta {
 		t.Errorf("expected EventTextDelta, got %q", ev.Type)
 	}
-	if ev.SessionID != "sess-123" {
-		t.Errorf("expected session_id sess-123, got %q", ev.SessionID)
+	if ev.Text != "Hi there friend" {
+		t.Errorf("expected text %q, got %q", "Hi there friend", ev.Text)
 	}
-	if ev.Text != "Hello " {
-		t.Errorf("expected text %q, got %q", "Hello ", ev.Text)
-	}
-}
-
-func TestParseStreamEvent_MessageStart(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-abc","event":{"type":"message_start","message":{"id":"msg-1","type":"message"}}}`
-	ev, err := agent.ParseStreamEvent(line)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ev.Type != agent.EventMessageStart {
-		t.Errorf("expected EventMessageStart, got %q", ev.Type)
-	}
-	if ev.SessionID != "sess-abc" {
-		t.Errorf("expected session_id sess-abc, got %q", ev.SessionID)
+	if ev.SessionID != "3dfd476f-099e-47dc-8898-d02a7976a4f3" {
+		t.Errorf("expected session id, got %q", ev.SessionID)
 	}
 }
 
-func TestParseStreamEvent_MessageStop(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-xyz","event":{"type":"message_stop"}}`
-	ev, err := agent.ParseStreamEvent(line)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ev.Type != agent.EventMessageStop {
-		t.Errorf("expected EventMessageStop, got %q", ev.Type)
-	}
-}
+func TestParseStreamEvent_AssistantToolUse_EmitsToolUseStart(t *testing.T) {
+	// When the model calls a tool, the assistant content item is
+	// {type:tool_use, id, name, input}. We surface it as EventToolUseStart.
+	line := `{"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]},"session_id":"sess-tool"}`
 
-func TestParseStreamEvent_ToolUseStart(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-tool","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"tool-1","name":"bash"}}}`
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -57,59 +59,62 @@ func TestParseStreamEvent_ToolUseStart(t *testing.T) {
 	if ev.Type != agent.EventToolUseStart {
 		t.Errorf("expected EventToolUseStart, got %q", ev.Type)
 	}
-	if ev.ToolName != "bash" {
-		t.Errorf("expected tool name %q, got %q", "bash", ev.ToolName)
+	if ev.ToolName != "Bash" {
+		t.Errorf("expected tool name Bash, got %q", ev.ToolName)
 	}
-	if ev.ToolID != "tool-1" {
-		t.Errorf("expected tool id %q, got %q", "tool-1", ev.ToolID)
+	if ev.ToolID != "toolu_1" {
+		t.Errorf("expected tool id toolu_1, got %q", ev.ToolID)
 	}
 }
 
-func TestParseStreamEvent_ToolUseEnd(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-tool","event":{"type":"content_block_stop"}}`
+func TestParseStreamEvent_Result_EmitsMessageStop(t *testing.T) {
+	// The final type:result line terminates a turn. Handler expects
+	// EventMessageStop to flush the accumulated assistant buffer.
+	line := `{"type":"result","subtype":"success","is_error":false,"result":"Hi there friend","session_id":"3dfd476f-099e-47dc-8898-d02a7976a4f3","duration_ms":1846}`
+
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ev.Type != agent.EventToolUseEnd {
-		t.Errorf("expected EventToolUseEnd, got %q", ev.Type)
+	if ev.Type != agent.EventMessageStop {
+		t.Errorf("expected EventMessageStop, got %q", ev.Type)
+	}
+	if ev.SessionID != "3dfd476f-099e-47dc-8898-d02a7976a4f3" {
+		t.Errorf("expected session id, got %q", ev.SessionID)
+	}
+	if ev.Text != "Hi there friend" {
+		t.Errorf("expected full result text, got %q", ev.Text)
 	}
 }
 
-func TestParseStreamEvent_Result(t *testing.T) {
-	line := `{"type":"result","session_id":"sess-res","result":"Task complete","is_error":false}`
-	ev, err := agent.ParseStreamEvent(line)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ev.Type != agent.EventResult {
-		t.Errorf("expected EventResult, got %q", ev.Type)
-	}
-	if ev.Text != "Task complete" {
-		t.Errorf("expected text %q, got %q", "Task complete", ev.Text)
-	}
-}
+func TestParseStreamEvent_UserToolResult_Unknown(t *testing.T) {
+	// type:user events carry tool results back into the conversation.
+	// They are not rendered in the chat, so we treat them as unknown.
+	line := `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"file1\nfile2"}]},"session_id":"sess-tool"}`
 
-func TestParseStreamEvent_Unknown(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-unk","event":{"type":"something_else"}}`
-	ev, err := agent.ParseStreamEvent(line)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ev.Type != agent.EventUnknown {
-		t.Errorf("expected EventUnknown, got %q", ev.Type)
-	}
-}
-
-func TestParseStreamEvent_NonTextDelta(t *testing.T) {
-	// content_block_delta but NOT text_delta — should be unknown
-	line := `{"type":"stream_event","session_id":"sess-inp","event":{"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{"}}}`
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if ev.Type != agent.EventUnknown {
-		t.Errorf("expected EventUnknown for non-text delta, got %q", ev.Type)
+		t.Errorf("expected EventUnknown for user/tool_result, got %q", ev.Type)
+	}
+}
+
+func TestParseStreamEvent_AssistantMultipleTextBlocks_UsesFirstText(t *testing.T) {
+	// An assistant message may contain multiple blocks. We use the
+	// concatenated text so the full turn is visible in the chat.
+	line := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello "},{"type":"text","text":"world"}]},"session_id":"sess-1"}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Type != agent.EventTextDelta {
+		t.Fatalf("expected EventTextDelta, got %q", ev.Type)
+	}
+	if ev.Text != "Hello world" {
+		t.Errorf("expected concatenated text %q, got %q", "Hello world", ev.Text)
 	}
 }
 
@@ -121,7 +126,7 @@ func TestParseStreamEvent_InvalidJSON(t *testing.T) {
 }
 
 func TestParseStreamEvent_RawIsPopulated(t *testing.T) {
-	line := `{"type":"stream_event","session_id":"sess-123","event":{"type":"message_stop"}}`
+	line := `{"type":"result","subtype":"success","result":"ok","session_id":"s"}`
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
