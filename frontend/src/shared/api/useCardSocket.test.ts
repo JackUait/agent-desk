@@ -133,6 +133,34 @@ describe("useCardSocket", () => {
     expect(result.current.userMessages[0].content).toBe("Hello agent");
   });
 
+  it("sendMessage includes the model when provided", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("Hello", "claude-sonnet-4-6");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toEqual({
+      type: "message",
+      content: "Hello",
+      model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("sendMessage omits model when not provided", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("Hello");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).not.toHaveProperty("model");
+  });
+
   it("sendAction sends action type as JSON", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {

@@ -15,7 +15,7 @@ import {
 export interface UseCardSocketResult {
   userMessages: Message[];
   chatStream: ChatStreamState;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, model?: string) => void;
   sendAction: (type: "start" | "approve" | "merge") => void;
   cardUpdates: Partial<Card>;
   currentColumn: CardColumn | null;
@@ -97,9 +97,12 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
     };
   }, [cardId]);
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((content: string, model?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const msg: WSClientMessage = { type: "message", content };
+    const msg: WSClientMessage =
+      model && model.length > 0
+        ? { type: "message", content, model }
+        : { type: "message", content };
     wsRef.current.send(JSON.stringify(msg));
     setUserMessages((prev) => [
       ...prev,

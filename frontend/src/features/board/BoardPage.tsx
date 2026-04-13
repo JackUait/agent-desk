@@ -3,16 +3,19 @@ import { useBoard } from "./use-board";
 import { Column } from "./Column";
 import { CardModal } from "../card";
 import { useCardSocket } from "../../shared/api/useCardSocket";
-import type { Card } from "../../shared/types/domain";
+import { useModels } from "../chat";
+import type { Card, Model } from "../../shared/types/domain";
 import styles from "./BoardPage.module.css";
 
 function CardModalWrapper({
   card,
+  models,
   onClose,
   updateCard,
   moveCardToColumn,
 }: {
   card: Card;
+  models: Model[];
   onClose: () => void;
   updateCard: (card: Card) => void;
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
@@ -67,8 +70,8 @@ function CardModalWrapper({
       card={mergedCard}
       userMessages={userMessages}
       chatStream={chatStream}
-      models={[]}
-      onSend={(content) => sendMessage(content)}
+      models={models}
+      onSend={(content, model) => sendMessage(content, model)}
       onStart={handleStart}
       onApprove={handleApprove}
       onMerge={handleMerge}
@@ -90,6 +93,7 @@ export function BoardPage() {
     updateCard,
     moveCardToColumn,
   } = useBoard();
+  const { models } = useModels();
 
   function handleNewCard() {
     const title = "New Card";
@@ -122,6 +126,7 @@ export function BoardPage() {
       {selectedCard && (
         <CardModalWrapper
           card={selectedCard}
+          models={models}
           onClose={() => selectCard(null)}
           updateCard={updateCard}
           moveCardToColumn={moveCardToColumn}
