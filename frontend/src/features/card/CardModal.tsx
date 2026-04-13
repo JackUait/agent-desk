@@ -1,12 +1,13 @@
 import type { Card, Message } from "../../shared/types/domain";
 import { ChatPanel } from "../chat";
+import type { ChatStreamState } from "../chat";
 import { CardContent } from "./CardContent";
 import styles from "./CardModal.module.css";
 
 interface CardModalProps {
   card: Card;
-  messages: Message[];
-  streamingContent: string;
+  userMessages: Message[];
+  chatStream: ChatStreamState;
   onSend: (content: string) => void;
   onStart: () => void;
   onApprove: () => void;
@@ -16,8 +17,8 @@ interface CardModalProps {
 
 export function CardModal({
   card,
-  messages,
-  streamingContent,
+  userMessages,
+  chatStream,
   onSend,
   onStart,
   onApprove,
@@ -37,8 +38,8 @@ export function CardModal({
         </div>
         <div className={styles.right}>
           <ChatPanel
-            messages={messages}
-            streamingContent={streamingContent}
+            userMessages={userMessages}
+            chatStream={chatStream}
             onSend={onSend}
             readOnly={card.column === "done"}
           />

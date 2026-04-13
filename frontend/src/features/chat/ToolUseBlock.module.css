@@ -1,0 +1,126 @@
+.block {
+  --dot: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-card);
+  border-radius: 4px;
+}
+
+.block[data-status="running"] {
+  --dot: var(--stream-accent, #14b8a6);
+  border-color: color-mix(in srgb, var(--stream-accent, #14b8a6) 35%, var(--border-card));
+}
+
+.block[data-status="error"] {
+  --dot: var(--error-accent, #dc2626);
+  border-color: color-mix(in srgb, var(--error-accent, #dc2626) 35%, var(--border-card));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  flex: 0 0 8px;
+}
+
+.block[data-status="running"] .dot {
+  animation: blinkDot 1s ease-in-out infinite;
+}
+
+.toolName {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+
+.input {
+  margin: 0;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.resultWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-card);
+  margin: 2px 0;
+}
+
+.result {
+  margin: 0;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.result[data-error="true"] {
+  color: var(--error-accent, #dc2626);
+  border-color: color-mix(in srgb, var(--error-accent, #dc2626) 35%, var(--border-card));
+}
+
+.expand {
+  align-self: flex-start;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-card);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.expand:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+@keyframes blinkDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}

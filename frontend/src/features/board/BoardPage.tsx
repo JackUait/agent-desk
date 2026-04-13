@@ -18,8 +18,8 @@ function CardModalWrapper({
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
 }) {
   const {
-    messages,
-    streamingContent,
+    userMessages,
+    chatStream,
     sendMessage,
     sendAction,
     cardUpdates,
@@ -65,8 +65,8 @@ function CardModalWrapper({
   return (
     <CardModal
       card={mergedCard}
-      messages={messages}
-      streamingContent={streamingContent}
+      userMessages={userMessages}
+      chatStream={chatStream}
       onSend={sendMessage}
       onStart={handleStart}
       onApprove={handleApprove}

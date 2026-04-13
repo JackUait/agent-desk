@@ -14,7 +14,6 @@ class MockWebSocket {
 
   constructor(url: string) {
     this.url = url;
-    // Trigger onopen asynchronously so callers can set the handler first
     MockWebSocket.instances.push(this);
   }
 
@@ -77,32 +76,46 @@ describe("useCardSocket", () => {
     expect(result.current.status).toBe("connecting");
   });
 
-  it("accumulates token messages as streaming content", () => {
+  it("folds typed stream frames into chatStream state", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {
       getInstance().simulateOpen();
-      getInstance().simulateMessage({ type: "token", content: "Hello" });
-      getInstance().simulateMessage({ type: "token", content: " world" });
-    });
-    expect(result.current.streamingContent).toBe("Hello world");
-  });
-
-  it("adds a message and clears streaming on message event", () => {
-    const { result } = renderHook(() => useCardSocket("card-1"));
-    act(() => {
-      getInstance().simulateOpen();
-      getInstance().simulateMessage({ type: "token", content: "partial" });
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
       getInstance().simulateMessage({
-        type: "message",
-        role: "assistant",
-        content: "Full response",
-        id: "msg-1",
-        timestamp: 1000,
+        type: "block_start",
+        index: 0,
+        kind: "text",
+      });
+      getInstance().simulateMessage({
+        type: "block_delta",
+        index: 0,
+        text: "hello",
+      });
+      getInstance().simulateMessage({
+        type: "block_delta",
+        index: 0,
+        text: " world",
+      });
+      getInstance().simulateMessage({ type: "block_stop", index: 0 });
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 500,
+        costUsd: 0.002,
+        inputTokens: 1,
+        outputTokens: 2,
+        stopReason: "end_turn",
       });
     });
-    expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0].content).toBe("Full response");
-    expect(result.current.streamingContent).toBe("");
+
+    const turns = result.current.chatStream.turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0].status).toBe("done");
+    const block = turns[0].blocks[0];
+    expect(block.kind).toBe("text");
+    if (block.kind === "text") {
+      expect(block.text).toBe("hello world");
+      expect(block.done).toBe(true);
+    }
   });
 
   it("sendMessage sends JSON and adds user message locally", () => {
@@ -115,9 +128,9 @@ describe("useCardSocket", () => {
     });
     const sent = JSON.parse(getInstance().sent[0]);
     expect(sent).toEqual({ type: "message", content: "Hello agent" });
-    expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0].role).toBe("user");
-    expect(result.current.messages[0].content).toBe("Hello agent");
+    expect(result.current.userMessages).toHaveLength(1);
+    expect(result.current.userMessages[0].role).toBe("user");
+    expect(result.current.userMessages[0].content).toBe("Hello agent");
   });
 
   it("sendAction sends action type as JSON", () => {

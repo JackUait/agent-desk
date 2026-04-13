@@ -12,8 +12,76 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   padding: 16px;
+}
+
+.pair {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.turnBlocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.streamIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--stream-accent, #0d9488);
+}
+
+.streamDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--stream-accent, #0d9488);
+  animation: chatStreamPulse 1s ease-in-out infinite;
+}
+
+.streamLabel {
+  color: var(--stream-accent, #0d9488);
+}
+
+.metrics {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.metricSep {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+@keyframes chatStreamPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .inputForm {

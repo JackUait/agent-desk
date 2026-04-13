@@ -41,10 +41,36 @@ export type WSClientMessage =
   | { type: "merge" };
 
 export type WSServerMessage =
-  | { type: "token"; content: string }
-  | { type: "message"; role: string; content: string; id: string; timestamp: number }
   | { type: "card_update"; fields: Partial<Card> }
   | { type: "status"; column: CardColumn }
   | { type: "worktree"; path: string }
   | { type: "pr"; url: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "turn_start"; sessionId: string }
+  | { type: "block_start"; index: number; kind: "text" }
+  | { type: "block_start"; index: number; kind: "thinking" }
+  | {
+      type: "block_start";
+      index: number;
+      kind: "tool_use";
+      toolId: string;
+      toolName: string;
+    }
+  | { type: "block_delta"; index: number; text: string }
+  | { type: "block_delta"; index: number; thinking: string }
+  | { type: "block_delta"; index: number; partialJson: string }
+  | { type: "block_stop"; index: number }
+  | {
+      type: "tool_result";
+      toolUseId: string;
+      content: string;
+      isError: boolean;
+    }
+  | {
+      type: "turn_end";
+      durationMs: number;
+      costUsd: number;
+      inputTokens: number;
+      outputTokens: number;
+      stopReason: string;
+    };

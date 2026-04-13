@@ -1,4 +1,7 @@
 export { ChatPanel } from "./ChatPanel";
+export { ThinkingBlock } from "./ThinkingBlock";
+export { ToolUseBlock } from "./ToolUseBlock";
+export { TextBlock } from "./TextBlock";
 export {
   chatStreamReducer,
   initialChatStreamState,

@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardModal } from "./CardModal";
 import type { Card, Message } from "../../shared/types/domain";
+import { initialChatStreamState } from "../chat";
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -34,8 +35,8 @@ describe("CardModal", () => {
     render(
       <CardModal
         card={makeCard()}
-        messages={messages}
-        streamingContent=""
+        userMessages={messages}
+        chatStream={initialChatStreamState}
         onSend={noop}
         onStart={noop}
         onApprove={noop}
@@ -52,8 +53,8 @@ describe("CardModal", () => {
     render(
       <CardModal
         card={makeCard()}
-        messages={messages}
-        streamingContent=""
+        userMessages={messages}
+        chatStream={initialChatStreamState}
         onSend={noop}
         onStart={noop}
         onApprove={noop}
@@ -70,8 +71,8 @@ describe("CardModal", () => {
     render(
       <CardModal
         card={makeCard()}
-        messages={messages}
-        streamingContent=""
+        userMessages={messages}
+        chatStream={initialChatStreamState}
         onSend={noop}
         onStart={noop}
         onApprove={noop}
@@ -87,8 +88,8 @@ describe("CardModal", () => {
     render(
       <CardModal
         card={makeCard({ column: "done" })}
-        messages={[]}
-        streamingContent=""
+        userMessages={[]}
+        chatStream={initialChatStreamState}
         onSend={noop}
         onStart={noop}
         onApprove={noop}

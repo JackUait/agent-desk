@@ -1,9 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import type { Card, CardColumn, Message, WSClientMessage, WSServerMessage } from "../types/domain";
+import { useEffect, useRef, useState, useCallback, useReducer } from "react";
+import type {
+  Card,
+  CardColumn,
+  Message,
+  WSClientMessage,
+  WSServerMessage,
+} from "../types/domain";
+import {
+  chatStreamReducer,
+  initialChatStreamState,
+  type ChatStreamState,
+} from "../../features/chat/chatStream";
 
 export interface UseCardSocketResult {
-  messages: Message[];
-  streamingContent: string;
+  userMessages: Message[];
+  chatStream: ChatStreamState;
   sendMessage: (content: string) => void;
   sendAction: (type: "start" | "approve" | "merge") => void;
   cardUpdates: Partial<Card>;
@@ -15,13 +26,18 @@ export interface UseCardSocketResult {
 }
 
 export function useCardSocket(cardId: string): UseCardSocketResult {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [streamingContent, setStreamingContent] = useState("");
+  const [userMessages, setUserMessages] = useState<Message[]>([]);
+  const [chatStream, dispatchStream] = useReducer(
+    chatStreamReducer,
+    initialChatStreamState,
+  );
   const [cardUpdates, setCardUpdates] = useState<Partial<Card>>({});
   const [currentColumn, setCurrentColumn] = useState<CardColumn | null>(null);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [worktreePath, setWorktreePath] = useState<string | null>(null);
-  const [status, setStatus] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [status, setStatus] = useState<
+    "connecting" | "connected" | "disconnected"
+  >("connecting");
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -54,36 +70,25 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
       }
 
       switch (msg.type) {
-        case "token":
-          setStreamingContent((prev) => prev + msg.content);
-          break;
-        case "message":
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: msg.id,
-              role: msg.role as "user" | "assistant",
-              content: msg.content,
-              timestamp: msg.timestamp,
-            },
-          ]);
-          setStreamingContent("");
-          break;
         case "card_update":
           setCardUpdates((prev) => ({ ...prev, ...msg.fields }));
-          break;
+          return;
         case "status":
           setCurrentColumn(msg.column);
-          break;
+          return;
         case "worktree":
           setWorktreePath(msg.path);
-          break;
+          return;
         case "pr":
           setPrUrl(msg.url);
-          break;
+          return;
         case "error":
           setError(msg.message);
-          break;
+          return;
+        default:
+          // All remaining variants belong to the typed chat stream;
+          // the reducer safely ignores unknown frames.
+          dispatchStream(msg);
       }
     };
 
@@ -96,7 +101,7 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     const msg: WSClientMessage = { type: "message", content };
     wsRef.current.send(JSON.stringify(msg));
-    setMessages((prev) => [
+    setUserMessages((prev) => [
       ...prev,
       {
         id: `local-${Date.now()}`,
@@ -114,8 +119,8 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
   }, []);
 
   return {
-    messages,
-    streamingContent,
+    userMessages,
+    chatStream,
     sendMessage,
     sendAction,
     cardUpdates,
