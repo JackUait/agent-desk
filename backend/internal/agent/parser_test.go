@@ -232,21 +232,54 @@ func TestParseStreamEvent_StreamEvent_SignatureDelta_Unknown(t *testing.T) {
 	}
 }
 
-func TestParseStreamEvent_StreamEvent_ContentBlockStop_EmitsUnknown(t *testing.T) {
-	// content_block_stop carries only an index, no block type, so the
-	// parser can't know whether to emit a text-stop or a tool-stop. The
-	// handler correlates by index using its own per-turn state.
-	line := `{"type":"stream_event","event":{"type":"content_block_stop","index":0},"session_id":"s"}`
+func TestParseStreamEvent_StreamEvent_ContentBlockStop_EmitsContentBlockStop(t *testing.T) {
+	// content_block_stop carries only an index, no block type. The
+	// handler correlates back to the opening block via Index.
+	line := `{"type":"stream_event","event":{"type":"content_block_stop","index":2},"session_id":"s"}`
 
 	ev, err := agent.ParseStreamEvent(line)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ev.Type != agent.EventUnknown {
-		t.Errorf("expected EventUnknown, got %q", ev.Type)
+	if ev.Type != agent.EventContentBlockStop {
+		t.Errorf("expected EventContentBlockStop, got %q", ev.Type)
+	}
+	if ev.Index != 2 {
+		t.Errorf("expected index 2, got %d", ev.Index)
+	}
+}
+
+func TestParseStreamEvent_StreamEvent_MessageDelta_LeavesIndexZero(t *testing.T) {
+	// message_delta has no content block, so Index must stay zero to
+	// avoid ambiguity with a content_block_stop on block 0.
+	line := `{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn"}},"session_id":"s"}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Type != agent.EventMessageDelta {
+		t.Fatalf("expected EventMessageDelta, got %q", ev.Type)
 	}
 	if ev.Index != 0 {
-		t.Errorf("expected index 0, got %d", ev.Index)
+		t.Errorf("expected Index 0, got %d", ev.Index)
+	}
+}
+
+func TestParseStreamEvent_UserToolResult_ArrayContent_PreservesRawJSON(t *testing.T) {
+	// tool_result.content may be an array of content blocks. We preserve
+	// the raw JSON so the payload is not silently dropped.
+	line := `{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":[{"type":"text","text":"ok"}],"is_error":false}]},"session_id":"s"}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.Type != agent.EventToolResult {
+		t.Fatalf("expected EventToolResult, got %q", ev.Type)
+	}
+	if !strings.Contains(ev.ToolResult, `"text":"ok"`) {
+		t.Errorf("expected raw JSON preserved in ToolResult, got %q", ev.ToolResult)
 	}
 }
 
@@ -334,7 +367,7 @@ func TestParseStreamEvent_StreamTextFixture_EndToEnd(t *testing.T) {
 		agent.EventPartialText,
 		agent.EventPartialText,
 		agent.EventTextDelta,
-		agent.EventUnknown,
+		agent.EventContentBlockStop,
 		agent.EventMessageDelta,
 		agent.EventUnknown,
 		agent.EventMessageStop,
@@ -348,7 +381,7 @@ func TestParseStreamEvent_StreamToolFixture_EndToEnd(t *testing.T) {
 		agent.EventToolUseStart,
 		agent.EventToolInputDelta,
 		agent.EventToolInputDelta,
-		agent.EventUnknown,
+		agent.EventContentBlockStop,
 		agent.EventToolResult,
 	}
 	assertEventSequence(t, got, want)

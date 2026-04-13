@@ -8,20 +8,21 @@ import (
 type EventType string
 
 const (
-	EventTextDelta        EventType = "text_delta"
-	EventMessageStart     EventType = "message_start"
-	EventMessageStop      EventType = "message_stop"
-	EventToolUseStart     EventType = "tool_use_start"
-	EventToolUseEnd       EventType = "tool_use_end"
-	EventResult           EventType = "result"
-	EventUnknown          EventType = "unknown"
-	EventThinkingStart    EventType = "thinking_start"
-	EventThinkingDelta    EventType = "thinking_delta"
-	EventPartialText      EventType = "partial_text"
-	EventPartialTextStart EventType = "partial_text_start"
-	EventToolInputDelta   EventType = "tool_input_delta"
-	EventToolResult       EventType = "tool_result"
-	EventMessageDelta     EventType = "message_delta"
+	EventTextDelta         EventType = "text_delta"
+	EventMessageStart      EventType = "message_start"
+	EventMessageStop       EventType = "message_stop"
+	EventToolUseStart      EventType = "tool_use_start"
+	EventToolUseEnd        EventType = "tool_use_end"
+	EventResult            EventType = "result"
+	EventUnknown           EventType = "unknown"
+	EventThinkingStart     EventType = "thinking_start"
+	EventThinkingDelta     EventType = "thinking_delta"
+	EventPartialText       EventType = "partial_text"
+	EventPartialTextStart  EventType = "partial_text_start"
+	EventToolInputDelta    EventType = "tool_input_delta"
+	EventToolResult        EventType = "tool_result"
+	EventMessageDelta      EventType = "message_delta"
+	EventContentBlockStop  EventType = "content_block_stop"
 )
 
 type StreamEvent struct {
@@ -46,11 +47,6 @@ type StreamEvent struct {
 	OutputTokens int
 }
 
-// rawLine is the top-level envelope emitted by
-//
-//	claude -p --output-format stream-json [--include-partial-messages]
-//
-// See docs.anthropic.com — Claude Code non-interactive mode.
 type rawLine struct {
 	Type      string          `json:"type"`
 	Subtype   string          `json:"subtype"`
@@ -92,9 +88,6 @@ type rawUserContentBlock struct {
 	IsError   bool            `json:"is_error"`
 }
 
-// rawStreamEvent is the inner Anthropic Messages API event wrapped by a
-// type:"stream_event" envelope when Claude CLI is invoked with
-// --include-partial-messages.
 type rawStreamEvent struct {
 	Type         string             `json:"type"`
 	Index        int                `json:"index"`
@@ -118,9 +111,6 @@ type rawSEDelta struct {
 	StopReason  string `json:"stop_reason"`
 }
 
-// ParseStreamEvent parses a single line from Claude CLI stream-json output
-// and maps it onto the internal StreamEvent model consumed by the
-// websocket handler.
 func ParseStreamEvent(line string) (StreamEvent, error) {
 	raw := json.RawMessage(line)
 
@@ -136,9 +126,6 @@ func ParseStreamEvent(line string) (StreamEvent, error) {
 
 	switch envelope.Type {
 	case "system":
-		// system/init carries the session_id for a new conversation.
-		// We surface it as message_start so the websocket handler can
-		// persist the session id and reset its assistant buffer.
 		if envelope.Subtype == "init" {
 			ev.Type = EventMessageStart
 			return ev, nil
@@ -153,9 +140,9 @@ func ParseStreamEvent(line string) (StreamEvent, error) {
 			return ev, nil
 		}
 
-		// Prefer tool_use blocks over text when both are present so the
-		// UI can render tool calls instead of silently swallowing them.
-		// Individual text runs are surfaced via stream_event partials.
+		// Snapshot is a fallback: individual blocks are surfaced via
+		// stream_event partials. When mixed, prefer tool_use so tool
+		// calls render even if partial events were disabled.
 		for _, block := range msg.Content {
 			if block.Type == "tool_use" {
 				ev.Type = EventToolUseStart
@@ -186,9 +173,6 @@ func ParseStreamEvent(line string) (StreamEvent, error) {
 		return parseUserToolResult(ev, envelope.Message)
 
 	case "result":
-		// The terminal result line flushes the accumulated assistant
-		// message. We carry the full result text as a safety net for
-		// callers that want the complete answer in one shot.
 		ev.Type = EventMessageStop
 		ev.Text = envelope.Result
 		ev.DurationMS = envelope.DurationMS
@@ -216,10 +200,12 @@ func parseStreamEventInner(ev StreamEvent, raw json.RawMessage) (StreamEvent, er
 		return ev, nil
 	}
 
-	ev.Index = inner.Index
-
+	// Index is only meaningful on content_block_* events; leave it zero
+	// on message_* events so the handler cannot accidentally correlate
+	// a turn-level event to block 0.
 	switch inner.Type {
 	case "content_block_start":
+		ev.Index = inner.Index
 		if inner.ContentBlock == nil {
 			ev.Type = EventUnknown
 			return ev, nil
@@ -241,6 +227,7 @@ func parseStreamEventInner(ev StreamEvent, raw json.RawMessage) (StreamEvent, er
 		return ev, nil
 
 	case "content_block_delta":
+		ev.Index = inner.Index
 		if inner.Delta == nil {
 			ev.Type = EventUnknown
 			return ev, nil
@@ -259,14 +246,14 @@ func parseStreamEventInner(ev StreamEvent, raw json.RawMessage) (StreamEvent, er
 			ev.Thinking = inner.Delta.Thinking
 			return ev, nil
 		}
-		// signature_delta and anything else
+		// signature_delta and anything else drop silently; a thinking
+		// block's signature must never leak downstream.
 		ev.Type = EventUnknown
 		return ev, nil
 
 	case "content_block_stop":
-		// Parser cannot know whether this closed a text or tool block
-		// without stateful correlation. Handler does that via Index.
-		ev.Type = EventUnknown
+		ev.Index = inner.Index
+		ev.Type = EventContentBlockStop
 		return ev, nil
 
 	case "message_delta":
@@ -281,8 +268,6 @@ func parseStreamEventInner(ev StreamEvent, raw json.RawMessage) (StreamEvent, er
 		return ev, nil
 
 	case "message_start", "message_stop":
-		// No-op: session id already captured at system:init, and the
-		// envelope result line terminates the turn.
 		ev.Type = EventUnknown
 		return ev, nil
 	}
@@ -301,6 +286,9 @@ func parseUserToolResult(ev StreamEvent, raw json.RawMessage) (StreamEvent, erro
 		ev.Type = EventUnknown
 		return ev, nil
 	}
+	// ParseStreamEvent returns one event per line, so a user envelope
+	// with multiple tool_result blocks (parallel tool calls) exposes
+	// only the first here. ev.Raw preserves the full payload.
 	for _, block := range msg.Content {
 		if block.Type != "tool_result" {
 			continue
@@ -308,13 +296,14 @@ func parseUserToolResult(ev StreamEvent, raw json.RawMessage) (StreamEvent, erro
 		ev.Type = EventToolResult
 		ev.ToolUseID = block.ToolUseID
 		ev.IsError = block.IsError
-		// content may be a plain string or a content-block array. We
-		// only capture the string form; the raw envelope is still in
-		// ev.Raw for callers that need the full payload.
 		if len(block.Content) > 0 {
 			var s string
 			if err := json.Unmarshal(block.Content, &s); err == nil {
 				ev.ToolResult = s
+			} else {
+				// Content-block array form: preserve verbatim JSON
+				// instead of dropping the payload.
+				ev.ToolResult = string(block.Content)
 			}
 		}
 		return ev, nil
