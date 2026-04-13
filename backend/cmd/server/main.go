@@ -44,6 +44,9 @@ func main() {
 	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc)
 	wsHandler.RegisterRoutes(mux)
 
+	modelsHandler := agent.NewModelsHandler()
+	modelsHandler.RegisterRoutes(mux)
+
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      middleware.CORS(mux),
