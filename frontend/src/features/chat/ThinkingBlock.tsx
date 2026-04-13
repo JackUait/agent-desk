@@ -12,7 +12,7 @@ export function ThinkingBlock({ block }: ThinkingBlockProps) {
     <div
       className={styles.block}
       role="group"
-      aria-label="Thinking"
+      aria-label={streaming ? "Thinking, in progress" : "Thinking, complete"}
       data-streaming={streaming}
       data-testid="thinking-block"
     >

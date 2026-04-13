@@ -37,16 +37,12 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
     <div
       className={styles.block}
       role="group"
-      aria-label={`Tool ${block.toolName}`}
+      aria-label={`Tool ${block.toolName} ${statusLabel}`}
       data-status={status}
       data-testid="tool-use-block"
     >
       <div className={styles.header}>
-        <span
-          className={styles.dot}
-          role="img"
-          aria-label={`Tool ${statusLabel}`}
-        />
+        <span className={styles.dot} aria-hidden="true" />
         <span className={styles.toolName}>{block.toolName}</span>
       </div>
       {block.partialJson && (
@@ -69,9 +65,10 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
               className={styles.expand}
               onClick={() => setExpanded((v) => !v)}
             >
-              {expanded
-                ? "collapse"
-                : `expand (${resultLines.length - RESULT_VISIBLE_LINES} more lines)`}
+              {(() => {
+                const more = resultLines.length - RESULT_VISIBLE_LINES;
+                return expanded ? "collapse" : `expand (${more} more)`;
+              })()}
             </button>
           )}
         </div>

@@ -32,7 +32,18 @@ function renderBlock(block: ChatBlock) {
       return <ThinkingBlock key={block.index} block={block} />;
     case "tool_use":
       return <ToolUseBlock key={block.index} block={block} />;
+    default: {
+      const _exhaustive: never = block;
+      return _exhaustive;
+    }
   }
+}
+
+function scrollSignature(userMessages: Message[], chatStream: ChatStreamState): string {
+  const last = chatStream.turns[chatStream.turns.length - 1];
+  const blockCount = last?.blocks.length ?? 0;
+  const status = last?.status ?? "none";
+  return `${userMessages.length}|${chatStream.turns.length}|${blockCount}|${status}`;
 }
 
 function TurnView({ turn, isLast }: { turn: ChatTurn; isLast: boolean }) {
@@ -66,10 +77,11 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollKey = scrollSignature(userMessages, chatStream);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
-  }, [userMessages, chatStream]);
+  }, [scrollKey]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
