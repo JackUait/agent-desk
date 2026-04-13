@@ -1,6 +1,10 @@
 package card
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/jackuait/agent-desk/backend/internal/agent"
+)
 
 type Service struct {
 	store *Store
@@ -148,6 +152,22 @@ func (s *Service) SetWorktree(id, path, branch string) (Card, error) {
 	}
 	c.WorktreePath = path
 	c.BranchName = branch
+	s.store.Update(c)
+	return c, nil
+}
+
+// SetModel validates model against agent.AllowedModels and persists it on
+// the card. Returns an error containing "unknown model" when the id is not
+// in the registry, or an error when the card cannot be found.
+func (s *Service) SetModel(id, model string) (Card, error) {
+	if !agent.IsAllowed(model) {
+		return Card{}, fmt.Errorf("unknown model: %s", model)
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Model = model
 	s.store.Update(c)
 	return c, nil
 }

@@ -17,6 +17,7 @@ type Card struct {
 	AcceptanceCriteria []string `json:"acceptanceCriteria"`
 	Complexity         string   `json:"complexity"`
 	RelevantFiles      []string `json:"relevantFiles"`
+	Model              string   `json:"model"`
 	SessionID          string   `json:"sessionId"`
 	WorktreePath       string   `json:"worktreePath"`
 	BranchName         string   `json:"branchName"`

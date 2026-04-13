@@ -247,6 +247,48 @@ func TestSetSessionID_notFound(t *testing.T) {
 	}
 }
 
+// --- SetModel ---
+
+func TestSetModel_happyPath(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("x")
+	updated, err := svc.SetModel(c.ID, "claude-sonnet-4-6")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if updated.Model != "claude-sonnet-4-6" {
+		t.Fatalf("expected model persisted, got %q", updated.Model)
+	}
+	// Re-read to verify persistence.
+	got, err := svc.GetCard(c.ID)
+	if err != nil {
+		t.Fatalf("GetCard: %v", err)
+	}
+	if got.Model != "claude-sonnet-4-6" {
+		t.Fatalf("expected persisted model, got %q", got.Model)
+	}
+}
+
+func TestSetModel_unknownModel(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("x")
+	_, err := svc.SetModel(c.ID, "bogus-model")
+	if err == nil {
+		t.Fatal("expected error for unknown model")
+	}
+	if !strings.Contains(err.Error(), "unknown model") {
+		t.Fatalf("expected 'unknown model' in error, got %q", err.Error())
+	}
+}
+
+func TestSetModel_unknownCard(t *testing.T) {
+	svc := newTestService()
+	_, err := svc.SetModel("ghost", "claude-opus-4-6")
+	if err == nil {
+		t.Fatal("expected error for missing card")
+	}
+}
+
 // --- UpdateFields ---
 
 func TestUpdateFields_strings(t *testing.T) {
