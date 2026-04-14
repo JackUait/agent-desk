@@ -21,6 +21,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     prUrl: "",
     createdAt: 1000,
     model: "",
+    effort: "",
     ...overrides,
   };
 }

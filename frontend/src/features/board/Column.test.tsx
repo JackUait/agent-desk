@@ -19,6 +19,7 @@ const cards: Record<string, Card> = {
     prUrl: "",
     createdAt: 1000,
     model: "",
+    effort: "",
   },
   "card-2": {
     id: "card-2",
@@ -35,6 +36,7 @@ const cards: Record<string, Card> = {
     prUrl: "",
     createdAt: 1001,
     model: "",
+    effort: "",
   },
 };
 

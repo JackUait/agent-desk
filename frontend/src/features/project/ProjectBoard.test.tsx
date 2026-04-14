@@ -38,6 +38,7 @@ const cards: Record<string, Card> = {
     prUrl: "",
     createdAt: 1,
     model: "",
+    effort: "",
   },
 };
 

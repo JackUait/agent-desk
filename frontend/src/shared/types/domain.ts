@@ -35,6 +35,7 @@ export interface Card {
   prUrl: string;
   createdAt: number;
   model: string;
+  effort: string;
 }
 
 export interface Model {
@@ -50,7 +51,7 @@ export interface Message {
 }
 
 export type WSClientMessage =
-  | { type: "message"; content: string; model?: string }
+  | { type: "message"; content: string; model?: string; effort?: string }
   | { type: "start" }
   | { type: "approve" }
   | { type: "merge" };

@@ -17,6 +17,7 @@ const mockCard: Card = {
   prUrl: "",
   createdAt: 1000,
   model: "",
+  effort: "",
 };
 
 const mockBoard: Board = {
