@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { Column } from "./Column";
 import type { Card, Column as ColumnType } from "../../shared/types/domain";
 
 const cards: Record<string, Card> = {
   "card-1": {
     id: "card-1",
+    projectId: "test",
     title: "Set up CI pipeline",
     description: "Configure GitHub Actions",
     column: "backlog",
@@ -18,9 +19,17 @@ const cards: Record<string, Card> = {
     prUrl: "",
     createdAt: 1000,
     model: "",
+    effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
+    attachments: [],
   },
   "card-2": {
     id: "card-2",
+    projectId: "test",
     title: "Design auth flow",
     description: "Token-based auth",
     column: "backlog",
@@ -33,6 +42,13 @@ const cards: Record<string, Card> = {
     prUrl: "",
     createdAt: 1001,
     model: "",
+    effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
+    attachments: [],
   },
 };
 
@@ -64,6 +80,32 @@ describe("Column", () => {
     render(<Column column={empty} cards={cards} />);
     expect(screen.getByText("Done")).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
+  it("renders top and bottom add buttons when onAddCard is provided", () => {
+    render(<Column column={column} cards={cards} onAddCard={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /add card to top/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add a card/i })).toBeInTheDocument();
+  });
+
+  it("does not render add buttons when onAddCard is omitted", () => {
+    render(<Column column={column} cards={cards} />);
+    expect(screen.queryByRole("button", { name: /add card to top/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /add a card/i })).toBeNull();
+  });
+
+  it("invokes onAddCard with 'top' when the top button is clicked", () => {
+    const onAddCard = vi.fn();
+    render(<Column column={column} cards={cards} onAddCard={onAddCard} />);
+    fireEvent.click(screen.getByRole("button", { name: /add card to top/i }));
+    expect(onAddCard).toHaveBeenCalledWith("top");
+  });
+
+  it("invokes onAddCard with 'bottom' when the bottom button is clicked", () => {
+    const onAddCard = vi.fn();
+    render(<Column column={column} cards={cards} onAddCard={onAddCard} />);
+    fireEvent.click(screen.getByRole("button", { name: /add a card/i }));
+    expect(onAddCard).toHaveBeenCalledWith("bottom");
   });
 
   it("passes animation state to cards", () => {

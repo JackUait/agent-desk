@@ -1,0 +1,137 @@
+package project_test
+
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/jackuait/agent-desk/backend/internal/project"
+)
+
+func TestStore_Create_AssignsFieldsAndColorIdx(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	p, err := s.Create("/tmp/myproject")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.ID == "" {
+		t.Error("expected non-empty ID")
+	}
+	if p.Title != filepath.Base("/tmp/myproject") {
+		t.Errorf("expected title %q, got %q", filepath.Base("/tmp/myproject"), p.Title)
+	}
+	if p.Path != "/tmp/myproject" {
+		t.Errorf("expected path %q, got %q", "/tmp/myproject", p.Path)
+	}
+	if p.ColorIdx != 0 {
+		t.Errorf("expected ColorIdx 0, got %d", p.ColorIdx)
+	}
+	if p.CreatedAt == 0 {
+		t.Error("expected non-zero CreatedAt")
+	}
+}
+
+func TestStore_Create_RotatesColorIdx(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	for i := 0; i < 7; i++ {
+		p, err := s.Create("/tmp/proj" + string(rune('a'+i)))
+		if err != nil {
+			t.Fatalf("unexpected error on iteration %d: %v", i, err)
+		}
+		want := i % project.ColorPaletteSize
+		if p.ColorIdx != want {
+			t.Errorf("project %d: expected ColorIdx %d, got %d", i, want, p.ColorIdx)
+		}
+	}
+}
+
+func TestStore_Get_NotFound(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	_, ok := s.Get("ghost")
+	if ok {
+		t.Error("expected Get to return ok=false for missing ID")
+	}
+}
+
+func TestStore_List_ReturnsAllCreatedProjects(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	_, _ = s.Create("/tmp/a")
+	_, _ = s.Create("/tmp/b")
+	list := s.List()
+	if len(list) != 2 {
+		t.Fatalf("List len = %d, want 2", len(list))
+	}
+	found := map[string]bool{}
+	for _, p := range list {
+		found[p.Title] = true
+	}
+	if !found["a"] || !found["b"] {
+		t.Errorf("expected titles {a,b}, got %v", found)
+	}
+}
+
+func TestStore_UpdateTitle(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	p, _ := s.Create("/tmp/myproject")
+
+	ok := s.UpdateTitle(p.ID, "Renamed Project")
+	if !ok {
+		t.Fatal("expected UpdateTitle to return true")
+	}
+
+	got, _ := s.Get(p.ID)
+	if got.Title != "Renamed Project" {
+		t.Errorf("expected title %q, got %q", "Renamed Project", got.Title)
+	}
+}
+
+func TestStore_UpdateTitle_NotFound(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	ok := s.UpdateTitle("ghost", "Whatever")
+	if ok {
+		t.Error("expected UpdateTitle to return false for missing ID")
+	}
+}
+
+func TestStore_Delete(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	p, _ := s.Create("/tmp/myproject")
+
+	ok := s.Delete(p.ID)
+	if !ok {
+		t.Fatal("expected Delete to return true")
+	}
+
+	_, found := s.Get(p.ID)
+	if found {
+		t.Error("expected project to be gone after Delete")
+	}
+}
+
+func TestStoreProjectPath(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	p, err := s.Create(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, ok := s.ProjectPath(p.ID)
+	if !ok || path != p.Path {
+		t.Errorf("ProjectPath mismatch: %s %v", path, ok)
+	}
+	if _, ok := s.ProjectPath("bogus"); ok {
+		t.Error("expected miss")
+	}
+}
+
+func TestStore_Create_RunsGitInitWhenNotARepo(t *testing.T) {
+	git := &project.StubGit{IsRepoVal: false}
+	s := project.NewStore(git)
+
+	_, err := s.Create("/tmp/newrepo")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(git.InitCalled) != 1 || git.InitCalled[0] != "/tmp/newrepo" {
+		t.Errorf("expected Init called with %q, got %v", "/tmp/newrepo", git.InitCalled)
+	}
+}

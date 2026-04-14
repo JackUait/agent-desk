@@ -14,9 +14,18 @@ import (
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/mcp"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	wsinternal "github.com/jackuait/agent-desk/backend/internal/websocket"
 	gowebsocket "nhooyr.io/websocket"
 )
+
+// noopGit satisfies project.Git without touching the filesystem.
+type noopGit struct{}
+
+func (noopGit) IsRepo(path string) bool { return true }
+func (noopGit) Init(path string) error  { return nil }
 
 // spyClaudeBin writes a tiny shell script that appends each invocation's
 // argv to argvFile (one arg per line, invocation-separated by a blank line)
@@ -66,11 +75,12 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 
 	store := card.NewStore()
 	svc = card.NewService(store)
-	c := svc.CreateCard("model test")
+	c := svc.CreateCard("proj-test", "model test")
 
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(spyClaudeBin(t, argvFile))
-	h := wsinternal.NewHandler(hub, manager, svc)
+	projStore := project.NewStore(noopGit{})
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -84,6 +94,17 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 func argvContainsModel(argv []string, id string) bool {
 	for i, a := range argv {
 		if a == "--model" && i+1 < len(argv) && argv[i+1] == id {
+			return true
+		}
+	}
+	return false
+}
+
+// argvContainsEffort returns true if the argv has "--effort level" as
+// adjacent entries.
+func argvContainsEffort(argv []string, level string) bool {
+	for i, a := range argv {
+		if a == "--effort" && i+1 < len(argv) && argv[i+1] == level {
 			return true
 		}
 	}
@@ -111,12 +132,13 @@ func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinte
 
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("test card")
+	c := svc.CreateCard("proj-test", "test card")
 
 	hub = wsinternal.NewHub()
 	// Use "false" as the agent binary — it exits immediately so tests don't hang.
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	projStore := project.NewStore(noopGit{})
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -210,6 +232,82 @@ func TestHandler_BroadcastsErrorOnInvalidMerge(t *testing.T) {
 	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
+// hangClaudeBin writes a shell script that ignores argv and sleeps so the
+// manager sees a long-running process — used by stop-message tests.
+func hangClaudeBin(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "hang-claude.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+		t.Fatalf("hangClaudeBin: %v", err)
+	}
+	return path
+}
+
+// TestHandler_StopMessageKillsRunningAgent verifies that sending a
+// {"type":"stop"} frame over the WebSocket terminates the agent process
+// spawned for that card.
+func TestHandler_StopMessageKillsRunningAgent(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "stop test")
+
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager(hangClaudeBin(t))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/cards/" + c.ID + "/ws"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := gowebsocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	time.Sleep(20 * time.Millisecond)
+
+	msgFrame, _ := json.Marshal(map[string]string{"type": "message", "content": "go"})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msgFrame); err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if manager.IsRunning(c.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !manager.IsRunning(c.ID) {
+		t.Fatalf("expected agent to be running before stop")
+	}
+
+	stopFrame, _ := json.Marshal(map[string]string{"type": "stop"})
+	if err := conn.Write(ctx, gowebsocket.MessageText, stopFrame); err != nil {
+		t.Fatalf("write stop: %v", err)
+	}
+
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if !manager.IsRunning(c.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if manager.IsRunning(c.ID) {
+		t.Fatalf("expected agent to be killed after stop")
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
 // collectBridgeFrames runs StartEventBridge against a real hub+card and
 // returns the parsed JSON frames in order. It blocks until the bridge
 // returns (events chan closed) or the short deadline expires.
@@ -218,10 +316,10 @@ func collectBridgeFrames(t *testing.T, events []agent.StreamEvent) (string, []ma
 
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("bridge test")
+	c := svc.CreateCard("proj-test", "bridge test")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -464,14 +562,14 @@ func TestEventBridge_TurnStart_ResetsDedupeSet(t *testing.T) {
 func TestEventBridge_ReadyForReviewStillMovesCard(t *testing.T) {
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("review test")
+	c := svc.CreateCard("proj-test", "review test")
 	// Move through statuses so MoveToReview is legal.
 	if _, err := svc.StartDevelopment(c.ID); err != nil {
 		t.Fatalf("StartDevelopment: %v", err)
 	}
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -688,6 +786,477 @@ func TestHandler_StartFrame_IgnoresClientModelField(t *testing.T) {
 	got, _ := svc.GetCard(cardID)
 	if got.Model != "claude-haiku-4-5" {
 		t.Fatalf("expected card model unchanged, got %q", got.Model)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_ValidEffort_PersistsAndSpawnsWithFlag(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "claude-sonnet-4-6",
+		"effort":  "high",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "high") {
+		t.Fatalf("expected --effort high in argv; got %v", inv[0])
+	}
+
+	got, err := svc.GetCard(cardID)
+	if err != nil {
+		t.Fatalf("GetCard: %v", err)
+	}
+	if got.Effort != "high" {
+		t.Fatalf("expected persisted effort high, got %q", got.Effort)
+	}
+
+	// Drain at least one card_update frame from the connection to confirm
+	// the broadcast happened. Model update (from claude-sonnet-4-6) and
+	// effort update each broadcast a card_update; read both and look for
+	// the one with effort = "high".
+	conn.SetReadLimit(1 << 20)
+	deadline, cancelR := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelR()
+	foundEffort := false
+	for !foundEffort {
+		_, raw, readErr := conn.Read(deadline)
+		if readErr != nil {
+			break
+		}
+		var frame struct {
+			Type   string `json:"type"`
+			Fields struct {
+				Effort string `json:"effort"`
+			} `json:"fields"`
+		}
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			continue
+		}
+		if frame.Type == "card_update" && frame.Fields.Effort == "high" {
+			foundEffort = true
+		}
+	}
+	if !foundEffort {
+		t.Error("expected a card_update frame with effort=high")
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_InvalidEffort_BroadcastsErrorNoSpawn(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "claude-opus-4-6",
+		"effort":  "ultra",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Expect at least one error frame referencing unknown effort.
+	conn.SetReadLimit(1 << 20)
+	deadline, cancelR := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelR()
+	foundErr := false
+	for !foundErr {
+		_, raw, readErr := conn.Read(deadline)
+		if readErr != nil {
+			break
+		}
+		var resp struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			continue
+		}
+		if resp.Type == "error" && strings.Contains(resp.Message, "unknown effort") {
+			foundErr = true
+		}
+	}
+	if !foundErr {
+		t.Fatal("expected an error frame containing 'unknown effort'")
+	}
+
+	// No spawn should have occurred.
+	time.Sleep(100 * time.Millisecond)
+	if inv := readSpyArgv(t, argvFile); len(inv) != 0 {
+		t.Fatalf("expected zero spawns, got %d: %v", len(inv), inv)
+	}
+
+	// Card effort must NOT have been persisted.
+	got, _ := svc.GetCard(cardID)
+	if got.Effort != "" {
+		t.Fatalf("expected empty card.Effort, got %q", got.Effort)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_AbsentEffort_UsesPersistedValue(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set effort on the card so the handler must read it from persistence.
+	if _, err := svc.SetEffort(cardID, "low"); err != nil {
+		t.Fatalf("pre-set effort: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "low") {
+		t.Fatalf("expected --effort low in argv; got %v", inv[0])
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Start_IgnoresClientEffort(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set effort = medium so we can see that start uses the persisted
+	// value, not a client-supplied "max".
+	if _, err := svc.SetEffort(cardID, "medium"); err != nil {
+		t.Fatalf("pre-set effort: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":   "start",
+		"effort": "max",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "medium") {
+		t.Fatalf("expected persisted --effort medium in argv; got %v", inv[0])
+	}
+	if argvContainsEffort(inv[0], "max") {
+		t.Fatalf("start frame must not honour client effort; got %v", inv[0])
+	}
+
+	// Card effort must remain unchanged.
+	got, _ := svc.GetCard(cardID)
+	if got.Effort != "medium" {
+		t.Fatalf("expected card.Effort unchanged (medium), got %q", got.Effort)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestHandler_MessageFrame_PersistsUserMessage(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hello",
+		"model":   "claude-sonnet-4-6",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	if inv := waitForSpyArgv(t, argvFile, 2*time.Second); len(inv) == 0 {
+		t.Fatal("expected spawn to complete")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var msgs []domain.Message
+	for time.Now().Before(deadline) {
+		got, err := svc.ListMessages(cardID)
+		if err != nil {
+			t.Fatalf("ListMessages: %v", err)
+		}
+		if len(got) >= 1 {
+			msgs = got
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(msgs) < 1 {
+		t.Fatalf("expected at least 1 persisted message, got %d", len(msgs))
+	}
+	if msgs[0].Role != "user" {
+		t.Fatalf("expected first message role=user, got %q", msgs[0].Role)
+	}
+	if msgs[0].Content != "hello" {
+		t.Fatalf("expected first message content=hello, got %q", msgs[0].Content)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "bridge persist")
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager("false")
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
+
+	ch := make(chan []byte, 256)
+	hub.Subscribe(c.ID, ch)
+	t.Cleanup(func() { hub.Unsubscribe(c.ID, ch) })
+
+	evCh := make(chan agent.StreamEvent, 4)
+	evCh <- agent.StreamEvent{Type: agent.EventMessageStart, SessionID: "s"}
+	evCh <- agent.StreamEvent{Type: agent.EventTextDelta, Text: "hello back"}
+	close(evCh)
+
+	done := make(chan struct{})
+	go func() {
+		h.StartEventBridge(c.ID, evCh)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bridge hang")
+	}
+
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 assistant message, got %d", len(msgs))
+	}
+	if msgs[0].Role != "assistant" {
+		t.Fatalf("expected role=assistant, got %q", msgs[0].Role)
+	}
+	if msgs[0].Content != "hello back" {
+		t.Fatalf("expected content=%q, got %q", "hello back", msgs[0].Content)
+	}
+}
+
+func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "bridge empty")
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager("false")
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
+
+	ch := make(chan []byte, 256)
+	hub.Subscribe(c.ID, ch)
+	t.Cleanup(func() { hub.Unsubscribe(c.ID, ch) })
+
+	evCh := make(chan agent.StreamEvent, 4)
+	evCh <- agent.StreamEvent{Type: agent.EventMessageStart, SessionID: "s"}
+	evCh <- agent.StreamEvent{Type: agent.EventTextDelta, Text: ""}
+	close(evCh)
+
+	done := make(chan struct{})
+	go func() {
+		h.StartEventBridge(c.ID, evCh)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("bridge hang")
+	}
+
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected 0 persisted messages for empty text delta, got %d", len(msgs))
+	}
+}
+
+// mcpSpyClaudeBin writes a shell script that:
+//   - appends each invocation's argv to argvFile (one arg per line, blank
+//     line between invocations) — same shape as spyClaudeBin
+//   - if --mcp-config <path> appears in argv, copies that file's contents
+//     to mcpCopyFile so the test can read the temp .mcp.json BEFORE the
+//     handler's cleanup goroutine removes it.
+func mcpSpyClaudeBin(t *testing.T, argvFile, mcpCopyFile string) string {
+	t.Helper()
+	script := fmt.Sprintf(`#!/bin/sh
+{ printf '%%s\n' "$@"; printf -- '---\n'; } >> %q
+seen=0
+for a in "$@"; do
+  if [ $seen = 1 ]; then
+    cp "$a" %q 2>/dev/null || true
+    seen=0
+    continue
+  fi
+  if [ "$a" = "--mcp-config" ]; then
+    seen=1
+  fi
+done
+exit 0
+`, argvFile, mcpCopyFile)
+	path := filepath.Join(t.TempDir(), "spy-claude-mcp.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("mcpSpyClaudeBin write: %v", err)
+	}
+	return path
+}
+
+// TestHandler_MintsMcpSession_WhenConfigured asserts that when a Handler is
+// constructed with a non-nil *mcp.Sessions and a non-zero mcpPort, dispatching
+// a single message frame causes exactly one Mint, the spawned agent argv
+// includes --mcp-config + --allowed-tools, the temp config file contains a
+// URL pointing at the configured port with the minted token, and the token
+// is revoked + the file removed once the turn completes.
+func TestHandler_MintsMcpSession_WhenConfigured(t *testing.T) {
+	tmp := t.TempDir()
+	argvFile := filepath.Join(tmp, "argv.txt")
+	mcpCopyFile := filepath.Join(tmp, "mcp-config-copy.json")
+
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "mcp test")
+
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager(mcpSpyClaudeBin(t, argvFile, mcpCopyFile))
+	projStore := project.NewStore(noopGit{})
+	sessions := mcp.NewSessions()
+	const mcpPort = 18765
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, sessions, mcpPort, nil)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	conn, ctx, cancel := dialWS(t, srv, c.ID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) != 1 {
+		t.Fatalf("expected exactly one spawn invocation, got %d: %v", len(inv), inv)
+	}
+
+	// Locate --mcp-config <path> and --allowed-tools mcp__agent_desk__*.
+	var cfgPath string
+	var allowedTools string
+	for i, a := range inv[0] {
+		if a == "--mcp-config" && i+1 < len(inv[0]) {
+			cfgPath = inv[0][i+1]
+		}
+		if a == "--allowed-tools" && i+1 < len(inv[0]) {
+			allowedTools = inv[0][i+1]
+		}
+	}
+	if cfgPath == "" {
+		t.Fatalf("expected --mcp-config <path> in argv; got %v", inv[0])
+	}
+	if allowedTools != "mcp__agent_desk__*" {
+		t.Fatalf("expected --allowed-tools mcp__agent_desk__*, got %q (argv=%v)", allowedTools, inv[0])
+	}
+
+	// The spy bin copied the temp config to mcpCopyFile *before* exiting, so
+	// even though the cleanup goroutine has likely already removed the
+	// original by now, we still have its bytes for inspection.
+	raw, err := os.ReadFile(mcpCopyFile)
+	if err != nil {
+		t.Fatalf("read mcp config copy: %v (cfgPath=%s)", err, cfgPath)
+	}
+
+	var parsed struct {
+		McpServers map[string]struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal mcp config: %v — raw=%s", err, raw)
+	}
+	srvCfg, ok := parsed.McpServers["agent_desk"]
+	if !ok {
+		t.Fatalf("expected mcpServers.agent_desk entry; got %+v", parsed)
+	}
+	if srvCfg.Type != "http" {
+		t.Fatalf("expected type=http, got %q", srvCfg.Type)
+	}
+	wantPrefix := fmt.Sprintf("http://127.0.0.1:%d/mcp?token=", mcpPort)
+	if !strings.HasPrefix(srvCfg.URL, wantPrefix) {
+		t.Fatalf("expected URL prefix %q, got %q", wantPrefix, srvCfg.URL)
+	}
+	token := strings.TrimPrefix(srvCfg.URL, wantPrefix)
+	if token == "" {
+		t.Fatal("expected non-empty token in mcp config URL")
+	}
+
+	// Eventually the cleanup goroutine revokes the token and removes the
+	// temp file. Poll briefly to avoid flake.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, exists := sessions.Resolve(token); exists {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		break
+	}
+	if cardID, exists := sessions.Resolve(token); exists {
+		t.Fatalf("expected token to be revoked after turn; still resolves to %q", cardID)
+	}
+	if _, statErr := os.Stat(cfgPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected temp mcp config %s removed after turn; stat err=%v", cfgPath, statErr)
 	}
 
 	conn.Close(gowebsocket.StatusNormalClosure, "")

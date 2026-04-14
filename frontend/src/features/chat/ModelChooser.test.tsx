@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ModelChooser } from "./ModelChooser";
 import type { Model } from "../../shared/types/domain";
@@ -11,50 +11,69 @@ const MODELS: Model[] = [
 ];
 
 describe("ModelChooser", () => {
-  it("renders one option per model", async () => {
-    const user = userEvent.setup();
-    render(
-      <ModelChooser models={MODELS} value="claude-opus-4-6" onChange={() => {}} />,
-    );
-    await user.click(screen.getByTestId("model-chooser"));
-    const options = screen.getAllByRole("option");
-    expect(options).toHaveLength(3);
-    expect(options[0]).toHaveTextContent("Opus 4.6");
-    expect(options[1]).toHaveTextContent("Sonnet 4.6");
-    expect(options[2]).toHaveTextContent("Haiku 4.5");
-  });
-
-  it("reflects the value prop as the selected option", () => {
-    render(
-      <ModelChooser models={MODELS} value="claude-sonnet-4-6" onChange={() => {}} />,
-    );
-    // The trigger button displays the label of the currently selected model.
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
-  });
-
-  it("calls onChange with the newly selected id", async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(
-      <ModelChooser models={MODELS} value="claude-opus-4-6" onChange={onChange} />,
-    );
-    await user.click(screen.getByTestId("model-chooser"));
-    const options = await screen.findAllByRole("option");
-    const haiku = options.find((o) => o.textContent?.includes("Haiku 4.5"));
-    if (!haiku) throw new Error("Haiku 4.5 option not found");
-    await user.click(haiku);
-    expect(onChange).toHaveBeenCalledWith("claude-haiku-4-5");
-  });
-
-  it("disables the select when disabled prop is true", () => {
+  it("shows the model label and effort in the trigger", () => {
     render(
       <ModelChooser
         models={MODELS}
-        value="claude-opus-4-6"
+        value={{ model: "claude-sonnet-4-6", effort: "high" }}
+        onChange={() => {}}
+      />,
+    );
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Sonnet 4.6");
+    expect(trigger).toHaveTextContent("high");
+  });
+
+  it("fires onChange with {model, effort} when a leaf is clicked", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange = vi.fn();
+    render(
+      <ModelChooser
+        models={MODELS}
+        value={{ model: "claude-opus-4-6", effort: "medium" }}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByTestId("model-chooser"));
+    await user.hover(await screen.findByRole("menuitem", { name: /Sonnet 4\.6/i }));
+    // Submenu opens; pick "max"
+    const maxItem = await screen.findByRole("menuitemcheckbox", { name: /max/i });
+    fireEvent.click(maxItem);
+
+    expect(onChange).toHaveBeenCalledWith({
+      model: "claude-sonnet-4-6",
+      effort: "max",
+    });
+  });
+
+  it("disables the trigger when disabled prop is set", () => {
+    render(
+      <ModelChooser
+        models={MODELS}
+        value={{ model: "claude-opus-4-6", effort: "medium" }}
         onChange={() => {}}
         disabled
       />,
     );
     expect(screen.getByTestId("model-chooser")).toBeDisabled();
+  });
+
+  it("renders a check indicator only on the currently selected leaf", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <ModelChooser
+        models={MODELS}
+        value={{ model: "claude-haiku-4-5", effort: "low" }}
+        onChange={() => {}}
+      />,
+    );
+    await user.click(screen.getByTestId("model-chooser"));
+    await user.hover(await screen.findByRole("menuitem", { name: /Haiku 4\.5/i }));
+
+    const lowItem = await screen.findByRole("menuitemcheckbox", { name: /low/i });
+    const maxItem = await screen.findByRole("menuitemcheckbox", { name: /max/i });
+    expect(lowItem).toHaveAttribute("aria-checked", "true");
+    expect(maxItem).toHaveAttribute("aria-checked", "false");
   });
 });

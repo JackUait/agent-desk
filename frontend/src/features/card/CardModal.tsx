@@ -7,26 +7,34 @@ import { Dialog } from "@/components/ui/dialog";
 
 interface CardModalProps {
   card: Card;
+  projectTitle?: string;
   userMessages: Message[];
   chatStream: ChatStreamState;
   models: Model[];
-  onSend: (content: string, model: string) => void;
-  onStart: () => void;
+  onSend: (content: string, model: string, effort: string) => void;
+  onStop?: () => void;
   onApprove: () => void;
   onMerge: () => void;
   onClose: () => void;
+  onUpdate: (fields: Partial<Card>) => void;
+  onUpload: (file: File) => Promise<void>;
+  onDeleteAttachment: (name: string) => Promise<void>;
 }
 
 export function CardModal({
   card,
+  projectTitle,
   userMessages,
   chatStream,
   models,
   onSend,
-  onStart,
+  onStop,
   onApprove,
   onMerge,
   onClose,
+  onUpdate,
+  onUpload,
+  onDeleteAttachment,
 }: CardModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -41,9 +49,12 @@ export function CardModal({
           <div className="overflow-y-auto border-r border-border-card p-8">
             <CardContent
               card={card}
-              onStart={onStart}
+              projectTitle={projectTitle}
               onApprove={onApprove}
               onMerge={onMerge}
+              onUpdate={onUpdate}
+              onUpload={onUpload}
+              onDeleteAttachment={onDeleteAttachment}
             />
           </div>
           <div className="flex min-h-0 flex-col">
@@ -51,8 +62,10 @@ export function CardModal({
               userMessages={userMessages}
               chatStream={chatStream}
               onSend={onSend}
+              onStop={onStop}
               models={models}
               cardModel={card.model}
+              cardEffort={card.effort}
               readOnly={card.column === "done"}
             />
           </div>

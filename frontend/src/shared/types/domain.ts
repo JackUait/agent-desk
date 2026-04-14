@@ -12,20 +12,49 @@ export interface Column {
 
 export type CardColumn = "backlog" | "in_progress" | "review" | "done";
 
+export interface Project {
+  id: string;
+  title: string;
+  path: string;
+  colorIdx: number;
+  createdAt: number;
+}
+
+export interface Progress {
+  step: number;
+  totalSteps: number;
+  currentStep: string;
+}
+
+export interface Attachment {
+  name: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: number;
+}
+
 export interface Card {
   id: string;
+  projectId: string;
   title: string;
   description: string;
   column: CardColumn;
   acceptanceCriteria: string[];
   complexity: string;
   relevantFiles: string[];
+  labels: string[];
+  summary: string;
+  blockedReason: string;
+  progress: Progress | null;
   sessionId: string;
   worktreePath: string;
   branchName: string;
   prUrl: string;
   createdAt: number;
+  updatedAt: number;
   model: string;
+  effort: string;
+  attachments: Attachment[];
 }
 
 export interface Model {
@@ -41,8 +70,9 @@ export interface Message {
 }
 
 export type WSClientMessage =
-  | { type: "message"; content: string; model?: string }
+  | { type: "message"; content: string; model?: string; effort?: string }
   | { type: "start" }
+  | { type: "stop" }
   | { type: "approve" }
   | { type: "merge" };
 

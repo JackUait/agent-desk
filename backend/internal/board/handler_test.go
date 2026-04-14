@@ -21,7 +21,8 @@ func newBoardHandlerWithStore(store *card.Store) *board.Handler {
 
 func TestGetBoardReturnsFourColumns(t *testing.T) {
 	h := newBoardHandler()
-	req := httptest.NewRequest(http.MethodGet, "/api/board", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/projects/proj-test/board", nil)
+	req.SetPathValue("projectId", "proj-test")
 	rec := httptest.NewRecorder()
 	h.GetBoard(rec, req)
 
@@ -51,10 +52,11 @@ func TestGetBoardReturnsFourColumns(t *testing.T) {
 
 func TestGetBoardCardAppearsInCorrectColumn(t *testing.T) {
 	store := card.NewStore()
-	created := store.Create("Test Card")
+	created := store.Create("proj-test", "Test Card")
 	h := newBoardHandlerWithStore(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/board", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/projects/proj-test/board", nil)
+	req.SetPathValue("projectId", "proj-test")
 	rec := httptest.NewRecorder()
 	h.GetBoard(rec, req)
 
@@ -78,5 +80,32 @@ func TestGetBoardCardAppearsInCorrectColumn(t *testing.T) {
 	}
 	if backlogCol.CardIDs[0] != created.ID {
 		t.Errorf("expected card ID %q in backlog, got %q", created.ID, backlogCol.CardIDs[0])
+	}
+}
+
+func TestGetBoard_ScopesToProject(t *testing.T) {
+	store := card.NewStore()
+	store.Create("proj-a", "Card for A")
+	store.Create("proj-b", "Card for B")
+	h := newBoardHandlerWithStore(store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/projects/proj-a/board", nil)
+	req.SetPathValue("projectId", "proj-a")
+	rec := httptest.NewRecorder()
+	h.GetBoard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp board.BoardResponse
+	json.NewDecoder(rec.Body).Decode(&resp)
+
+	total := 0
+	for _, col := range resp.Columns {
+		total += len(col.CardIDs)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 card total for proj-a board, got %d", total)
 	}
 }

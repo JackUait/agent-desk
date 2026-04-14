@@ -8,6 +8,7 @@ import { initialChatStreamState } from "../chat";
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
     id: "card-abc12345-xyz",
+    projectId: "test",
     title: "Implement auth flow",
     description: "Add JWT-based authentication",
     column: "backlog",
@@ -20,6 +21,13 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     prUrl: "",
     createdAt: 1000,
     model: "",
+    effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
+    attachments: [],
     ...overrides,
   };
 }
@@ -42,10 +50,12 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof CardModal>> 
     chatStream: initialChatStreamState,
     models: MODELS,
     onSend: vi.fn(),
-    onStart: vi.fn(),
     onApprove: vi.fn(),
     onMerge: vi.fn(),
     onClose: vi.fn(),
+    onUpdate: () => {},
+    onUpload: () => Promise.resolve(),
+    onDeleteAttachment: () => Promise.resolve(),
     ...overrides,
   };
   return render(<CardModal {...props} />);
@@ -54,7 +64,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof CardModal>> 
 describe("CardModal", () => {
   it("renders card content and chat panel", () => {
     renderModal();
-    expect(screen.getByText("Implement auth flow")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Implement auth flow")).toBeInTheDocument();
     expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
   });
 
@@ -73,7 +83,7 @@ describe("CardModal", () => {
   it("does not call onClose when clicking modal content", async () => {
     const onClose = vi.fn();
     renderModal({ onClose });
-    await userEvent.click(screen.getByText("Implement auth flow"));
+    await userEvent.click(screen.getByDisplayValue("Implement auth flow"));
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -81,5 +91,14 @@ describe("CardModal", () => {
     renderModal({ card: makeCard({ column: "done" }), userMessages: [] });
     const input = screen.getByLabelText("Message input");
     expect(input).toBeDisabled();
+  });
+
+  it("renders the chooser with effort inside the modal", () => {
+    renderModal({
+      card: makeCard({ model: "claude-sonnet-4-6", effort: "high" }),
+    });
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Sonnet 4.6");
+    expect(trigger).toHaveTextContent("high");
   });
 });

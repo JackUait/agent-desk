@@ -1,32 +1,75 @@
 import type { Card } from "../../shared/types/domain";
 import { Button } from "@/components/ui/button";
+import { ProgressBar } from "./ProgressBar";
+import { BlockedBanner } from "./BlockedBanner";
+import { LabelChips } from "./LabelChips";
+import { EditableTitle } from "./EditableTitle";
+import { EditableDescription } from "./EditableDescription";
+import { AttachmentList } from "./AttachmentList";
+import { api } from "../../shared/api/client";
 
 interface CardContentProps {
   card: Card;
-  onStart: () => void;
+  projectTitle?: string;
   onApprove: () => void;
   onMerge: () => void;
+  onUpdate: (fields: Partial<Card>) => void;
+  onUpload: (file: File) => Promise<void>;
+  onDeleteAttachment: (name: string) => Promise<void>;
 }
 
 function formatColumn(column: string): string {
   return column.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-export function CardContent({ card, onStart, onApprove, onMerge }: CardContentProps) {
+function formatRelative(epochSec: number): string {
+  if (!epochSec) return "";
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - epochSec);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+export function CardContent({ card, projectTitle, onApprove, onMerge, onUpdate, onUpload, onDeleteAttachment }: CardContentProps) {
   return (
     <div className="flex flex-col gap-4 p-6 overflow-y-auto" data-testid="card-content">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium px-2 py-0.5 rounded bg-accent-blue-bg text-accent-blue">
           {formatColumn(card.column)}
         </span>
-        <span className="text-xs font-mono text-text-muted">{card.id.slice(0, 8)}</span>
+        {projectTitle && (
+          <span className="text-xs font-mono text-text-muted">{projectTitle}</span>
+        )}
       </div>
 
-      <h3 className="text-xl font-semibold leading-snug text-text-primary m-0">{card.title}</h3>
+      <LabelChips labels={card.labels} />
 
-      {card.description && (
-        <p className="text-sm leading-relaxed text-text-secondary m-0">{card.description}</p>
+      <EditableTitle value={card.title} onChange={(title) => onUpdate({ title })} />
+
+      {card.summary && (
+        <p className="text-sm text-text-secondary m-0">{card.summary}</p>
       )}
+
+      {card.progress && (
+        <ProgressBar
+          step={card.progress.step}
+          totalSteps={card.progress.totalSteps}
+          currentStep={card.progress.currentStep}
+        />
+      )}
+
+      {card.blockedReason && <BlockedBanner reason={card.blockedReason} />}
+
+      <EditableDescription value={card.description} onChange={(description) => onUpdate({ description })} />
+
+      <AttachmentList
+        cardId={card.id}
+        attachments={card.attachments ?? []}
+        onUpload={onUpload}
+        onDelete={onDeleteAttachment}
+        hrefFor={api.attachmentUrl}
+      />
 
       {card.acceptanceCriteria.length > 0 && (
         <div className="flex flex-col gap-1.5">
@@ -89,14 +132,6 @@ export function CardContent({ card, onStart, onApprove, onMerge }: CardContentPr
         </div>
       )}
 
-      {card.column === "backlog" && (
-        <div className="flex gap-2 mt-2">
-          <Button variant="default" size="sm" type="button" onClick={onStart}>
-            Start Development
-          </Button>
-        </div>
-      )}
-
       {card.column === "review" && !card.prUrl && (
         <div className="flex gap-2 mt-2">
           <Button variant="secondary" size="sm" type="button" onClick={onApprove}>
@@ -111,6 +146,12 @@ export function CardContent({ card, onStart, onApprove, onMerge }: CardContentPr
             Merge
           </Button>
         </div>
+      )}
+
+      {card.updatedAt > 0 && (
+        <span data-testid="updated-at" className="text-[11px] text-text-muted">
+          updated {formatRelative(card.updatedAt)}
+        </span>
       )}
     </div>
   );

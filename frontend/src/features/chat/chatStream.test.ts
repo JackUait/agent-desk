@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChatStreamStateFromMessages,
   chatStreamReducer,
   initialChatStreamState,
   type ChatStreamState,
 } from "./chatStream";
+import type { Message } from "../../shared/types/domain";
 
 const reduce = (state: ChatStreamState, frames: unknown[]): ChatStreamState =>
   frames.reduce<ChatStreamState>(
@@ -291,6 +293,76 @@ describe("chatStreamReducer", () => {
     expect(after).not.toBe(before);
     expect(after.turns).not.toBe(before.turns);
     expect(before).toEqual(snapshot);
+  });
+
+  it("buildChatStreamStateFromMessages returns empty state for an empty array", () => {
+    expect(buildChatStreamStateFromMessages([])).toEqual({
+      turns: [],
+      turnInFlight: false,
+    });
+  });
+
+  it("buildChatStreamStateFromMessages skips user messages", () => {
+    const messages: Message[] = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "user", content: "still hi", timestamp: 2 },
+    ];
+    expect(buildChatStreamStateFromMessages(messages)).toEqual({
+      turns: [],
+      turnInFlight: false,
+    });
+  });
+
+  it("buildChatStreamStateFromMessages produces one done text turn per assistant message", () => {
+    const messages: Message[] = [
+      { id: "m1", role: "assistant", content: "a", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "b", timestamp: 2 },
+    ];
+    expect(buildChatStreamStateFromMessages(messages)).toEqual({
+      turns: [
+        {
+          blocks: [{ kind: "text", index: 0, text: "a", done: true }],
+          status: "done",
+        },
+        {
+          blocks: [{ kind: "text", index: 0, text: "b", done: true }],
+          status: "done",
+        },
+      ],
+      turnInFlight: false,
+    });
+  });
+
+  it("chatStreamReducer handles hydrate action and replaces state", () => {
+    const before = reduce(initialChatStreamState, [
+      { type: "turn_start", sessionId: "s" },
+      { type: "block_start", index: 0, kind: "text" },
+      { type: "block_delta", index: 0, text: "old" },
+    ]);
+    const messages: Message[] = [
+      { id: "m1", role: "assistant", content: "fresh", timestamp: 1 },
+    ];
+    const after = chatStreamReducer(before, { type: "hydrate", messages });
+    expect(after).toEqual({
+      turns: [
+        {
+          blocks: [{ kind: "text", index: 0, text: "fresh", done: true }],
+          status: "done",
+        },
+      ],
+      turnInFlight: false,
+    });
+  });
+
+  it("chatStreamReducer ignores hydrate action with a non-array messages field", () => {
+    const before = reduce(initialChatStreamState, [
+      { type: "turn_start", sessionId: "s" },
+    ]);
+    const after = chatStreamReducer(before, {
+      type: "hydrate",
+      messages: "nope",
+    });
+    expect(after).toBe(before);
   });
 
   it("real-world sequence test", () => {

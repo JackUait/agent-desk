@@ -27,7 +27,12 @@ func NewHandler(store *card.Store) *Handler {
 }
 
 func (h *Handler) GetBoard(w http.ResponseWriter, r *http.Request) {
-	cards := h.store.List()
+	projectID := r.PathValue("projectId")
+	if projectID == "" {
+		httputil.Error(w, http.StatusBadRequest, "projectId is required")
+		return
+	}
+	cards := h.store.List(projectID)
 
 	byCol := make(map[card.Column][]string)
 	for _, c := range cards {
@@ -48,12 +53,12 @@ func (h *Handler) GetBoard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.JSON(w, http.StatusOK, BoardResponse{
-		ID:      "main",
-		Title:   "Agent Desk",
+		ID:      projectID,
+		Title:   "",
 		Columns: cols,
 	})
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/board", h.GetBoard)
+	mux.HandleFunc("GET /api/projects/{projectId}/board", h.GetBoard)
 }

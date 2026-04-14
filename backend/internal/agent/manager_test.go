@@ -3,6 +3,7 @@ package agent_test
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,7 +58,7 @@ func TestManager_SendAndRead(t *testing.T) {
 	m := agent.NewManager(echoBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-1", "", "", "hello", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-1", Message: "hello", WorkDir: ""}, events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -76,13 +77,13 @@ func TestManager_SendDuplicate(t *testing.T) {
 	m := agent.NewManager(hangBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-2", "", "", "hello", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-2", Message: "hello", WorkDir: ""}, events); err != nil {
 		t.Fatalf("first Send: %v", err)
 	}
 
 	time.Sleep(20 * time.Millisecond)
 
-	err := m.Send("card-2", "", "", "hello", make(chan agent.StreamEvent, 8))
+	err := m.Send(agent.SendRequest{CardID: "card-2", Message: "hello", WorkDir: ""}, make(chan agent.StreamEvent, 8))
 	if err == nil {
 		t.Error("expected error on duplicate Send, got nil")
 	}
@@ -98,7 +99,7 @@ func TestManager_Send_IncludesPartialMessagesFlag(t *testing.T) {
 	m := agent.NewManager(bin)
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-flag", "", "", "hello world", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-flag", Message: "hello world", WorkDir: ""}, events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -167,7 +168,7 @@ func TestManager_Send_WithModel(t *testing.T) {
 	m := agent.NewManager(bin)
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-model", "", "claude-sonnet-4-6", "hello", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-model", Model: "claude-sonnet-4-6", Message: "hello", WorkDir: ""}, events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	for range events {
@@ -208,7 +209,7 @@ func TestManager_Send_WithoutModel(t *testing.T) {
 	m := agent.NewManager(bin)
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-nomodel", "", "", "hello", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-nomodel", Message: "hello", WorkDir: ""}, events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	for range events {
@@ -225,12 +226,76 @@ func TestManager_Send_WithoutModel(t *testing.T) {
 	}
 }
 
+// TestSend_NonEmptyEffortAddsFlag verifies a non-empty Effort on the
+// SendRequest threads through to --effort <level> in the argv.
+func TestSend_NonEmptyEffortAddsFlag(t *testing.T) {
+	var capturedArgs []string
+	builder := func(bin string, args []string, dir string) *exec.Cmd {
+		capturedArgs = args
+		// Use `true` binary so process exits immediately.
+		return exec.Command("true")
+	}
+	m := agent.NewManagerWithBuilder("claude", builder)
+
+	events := make(chan agent.StreamEvent, 4)
+	if err := m.Send(agent.SendRequest{
+		CardID:  "card-1",
+		Model:   "claude-sonnet-4-6",
+		Effort:  "max",
+		Message: "ping",
+	}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	found := false
+	for i, a := range capturedArgs {
+		if a == "--effort" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "max" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("argv missing --effort max; got %v", capturedArgs)
+	}
+}
+
+// TestSend_EmptyEffortOmitsFlag verifies an empty Effort on the SendRequest
+// produces no --effort flag in the argv.
+func TestSend_EmptyEffortOmitsFlag(t *testing.T) {
+	var capturedArgs []string
+	builder := func(bin string, args []string, dir string) *exec.Cmd {
+		capturedArgs = args
+		return exec.Command("true")
+	}
+	m := agent.NewManagerWithBuilder("claude", builder)
+
+	events := make(chan agent.StreamEvent, 4)
+	if err := m.Send(agent.SendRequest{
+		CardID:  "card-1",
+		Model:   "claude-opus-4-6",
+		Effort:  "",
+		Message: "ping",
+	}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	for _, a := range capturedArgs {
+		if a == "--effort" {
+			t.Errorf("unexpected --effort in argv: %v", capturedArgs)
+		}
+	}
+}
+
 // TestManager_IsRunning verifies a process is tracked while active.
 func TestManager_IsRunning(t *testing.T) {
 	m := agent.NewManager(hangBin(t))
 	events := make(chan agent.StreamEvent, 8)
 
-	if err := m.Send("card-3", "", "", "hello", events); err != nil {
+	if err := m.Send(agent.SendRequest{CardID: "card-3", Message: "hello", WorkDir: ""}, events); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -238,5 +303,82 @@ func TestManager_IsRunning(t *testing.T) {
 
 	if !m.IsRunning("card-3") {
 		t.Error("expected card-3 to be running")
+	}
+}
+
+// TestManager_Kill_TerminatesRunningProcess verifies Kill signals the
+// spawned CLI so it exits and IsRunning flips back to false.
+func TestManager_Kill_TerminatesRunningProcess(t *testing.T) {
+	m := agent.NewManager(hangBin(t))
+	events := make(chan agent.StreamEvent, 8)
+
+	if err := m.Send(agent.SendRequest{CardID: "card-kill", Message: "hi", WorkDir: ""}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if m.IsRunning("card-kill") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !m.IsRunning("card-kill") {
+		t.Fatalf("expected card-kill to be running before Kill")
+	}
+
+	if err := m.Kill("card-kill"); err != nil {
+		t.Fatalf("Kill: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for range events {
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("events channel did not close after Kill")
+	}
+
+	if m.IsRunning("card-kill") {
+		t.Errorf("expected card-kill to not be running after Kill")
+	}
+}
+
+// TestManager_Kill_UnknownCardIsNoop verifies Kill on an unknown card is
+// safe and returns nil.
+func TestManager_Kill_UnknownCardIsNoop(t *testing.T) {
+	m := agent.NewManager(echoBin(t))
+	if err := m.Kill("missing"); err != nil {
+		t.Errorf("Kill unknown: %v", err)
+	}
+}
+
+// TestManager_SendPassesWorkDirToBuilder verifies that WorkDir is threaded
+// into the commandBuilder so the process runs in the correct project directory.
+func TestManager_SendPassesWorkDirToBuilder(t *testing.T) {
+	exitZero := echoBin(t)
+	var gotDir string
+	m := agent.NewManagerWithBuilder(exitZero, func(bin string, args []string, dir string) *exec.Cmd {
+		gotDir = dir
+		return exec.Command(exitZero)
+	})
+	events := make(chan agent.StreamEvent, 1)
+	err := m.Send(agent.SendRequest{
+		CardID:  "c1",
+		Message: "hi",
+		WorkDir: "/tmp/proj-x",
+	}, events)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	// Drain until channel closes so the goroutine finishes.
+	for range events {
+	}
+	if gotDir != "/tmp/proj-x" {
+		t.Errorf("builder dir = %q, want /tmp/proj-x", gotDir)
 	}
 }

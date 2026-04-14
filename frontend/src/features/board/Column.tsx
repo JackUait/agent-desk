@@ -9,16 +9,29 @@ interface ColumnProps {
   exitingCards?: Set<string>;
   workingCards?: Set<string>;
   onCardClick?: (cardId: string) => void;
+  onAddCard?: (position: "top" | "bottom") => void;
 }
 
-export function Column({ column, cards, enteringCards, exitingCards, workingCards, onCardClick }: ColumnProps) {
+export function Column({ column, cards, enteringCards, exitingCards, workingCards, onCardClick, onAddCard }: ColumnProps) {
   return (
     <section className="flex min-w-[280px] max-w-[320px] flex-col gap-3 rounded-lg bg-bg-hover p-3">
       <div className="flex items-center justify-between px-1 pb-1">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
           {column.title}
         </h2>
-        <Badge variant="outline">{column.cardIds.length}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">{column.cardIds.length}</Badge>
+          {onAddCard && (
+            <button
+              type="button"
+              aria-label="Add card to top"
+              onClick={() => onAddCard("top")}
+              className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-text-secondary transition hover:bg-bg-page hover:text-text-primary"
+            >
+              +
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex flex-col gap-2">
         {column.cardIds.map((cardId) => {
@@ -37,6 +50,15 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
           );
         })}
       </div>
+      {onAddCard && (
+        <button
+          type="button"
+          onClick={() => onAddCard("bottom")}
+          className="mt-1 cursor-pointer rounded-md border border-dashed border-border-card px-2 py-2 text-xs text-text-secondary transition hover:border-text-secondary hover:text-text-primary"
+        >
+          + Add a card
+        </button>
+      )}
     </section>
   );
 }

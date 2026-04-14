@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { useCardSocket } from "./useCardSocket";
+import { api } from "./client";
+import type { Message } from "../types/domain";
 
 class MockWebSocket {
   static OPEN = 1;
@@ -47,10 +49,12 @@ class MockWebSocket {
 beforeEach(() => {
   MockWebSocket.reset();
   vi.stubGlobal("WebSocket", MockWebSocket);
+  vi.spyOn(api, "listMessages").mockResolvedValue([]);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function getInstance() {
@@ -161,6 +165,40 @@ describe("useCardSocket", () => {
     expect(sent).not.toHaveProperty("model");
   });
 
+  it("sendMessage stamps model and effort onto the message frame", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("hi", "claude-sonnet-4-6", "high");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toEqual({
+      type: "message",
+      content: "hi",
+      model: "claude-sonnet-4-6",
+      effort: "high",
+    });
+  });
+
+  it("sendMessage omits effort when undefined", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("hi", "claude-sonnet-4-6");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toMatchObject({
+      type: "message",
+      content: "hi",
+      model: "claude-sonnet-4-6",
+    });
+    expect("effort" in sent).toBe(false);
+  });
+
   it("sendAction sends action type as JSON", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {
@@ -171,6 +209,139 @@ describe("useCardSocket", () => {
     });
     const sent = JSON.parse(getInstance().sent[0]);
     expect(sent).toEqual({ type: "start" });
+  });
+
+  it("queues a second sendMessage while a turn is in flight and flushes it on turn_end", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+
+    act(() => {
+      result.current.sendMessage("first");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+
+    // Second message arrives mid-turn — must NOT hit the wire yet.
+    act(() => {
+      result.current.sendMessage("second");
+    });
+    expect(getInstance().sent).toHaveLength(1);
+    // But the user message appears locally right away.
+    expect(result.current.userMessages.map((m) => m.content)).toEqual([
+      "first",
+      "second",
+    ]);
+
+    // Turn ends — queued message must now be sent.
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+    const flushed = JSON.parse(getInstance().sent[1]);
+    expect(flushed).toMatchObject({ type: "message", content: "second" });
+  });
+
+  it("queues multiple mid-turn messages and flushes them across turn boundaries", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+
+    act(() => {
+      result.current.sendMessage("a");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+    act(() => {
+      result.current.sendMessage("b");
+      result.current.sendMessage("c");
+    });
+    expect(getInstance().sent).toHaveLength(1);
+
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+    expect(JSON.parse(getInstance().sent[1])).toMatchObject({ content: "b" });
+
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s2" });
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(3);
+    expect(JSON.parse(getInstance().sent[2])).toMatchObject({ content: "c" });
+  });
+
+  it("clears the queued messages when sendAction('stop') is invoked", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("first");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+    act(() => {
+      result.current.sendMessage("queued");
+    });
+    act(() => {
+      result.current.sendAction("stop");
+    });
+    // Flush frame for stop hit the wire.
+    const stopFrame = JSON.parse(getInstance().sent[1]);
+    expect(stopFrame).toEqual({ type: "stop" });
+
+    // After turn ends, the queued message must NOT be sent.
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+  });
+
+  it("sendAction('stop') sends a stop frame", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendAction("stop");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toEqual({ type: "stop" });
   });
 
   it("updates currentColumn on status message", () => {
@@ -207,6 +378,59 @@ describe("useCardSocket", () => {
       getInstance().simulateMessage({ type: "error", message: "something went wrong" });
     });
     expect(result.current.error).toBe("something went wrong");
+  });
+
+  it("calls api.listMessages with the cardId on mount", () => {
+    const spy = vi
+      .spyOn(api, "listMessages")
+      .mockResolvedValue([]);
+    renderHook(() => useCardSocket("card-1"));
+    expect(spy).toHaveBeenCalledWith("card-1");
+  });
+
+  it("populates userMessages from persisted user messages on mount", async () => {
+    const persisted: Message[] = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "hello", timestamp: 2 },
+    ];
+    vi.spyOn(api, "listMessages").mockResolvedValue(persisted);
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.userMessages).toHaveLength(1);
+    });
+    expect(result.current.userMessages[0].role).toBe("user");
+    expect(result.current.userMessages[0].content).toBe("hi");
+  });
+
+  it("hydrates chatStream from persisted assistant messages on mount", async () => {
+    const persisted: Message[] = [
+      { id: "m1", role: "user", content: "hi", timestamp: 1 },
+      { id: "m2", role: "assistant", content: "hello", timestamp: 2 },
+    ];
+    vi.spyOn(api, "listMessages").mockResolvedValue(persisted);
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.chatStream.turns).toHaveLength(1);
+    });
+    const turn = result.current.chatStream.turns[0];
+    expect(turn.status).toBe("done");
+    const block = turn.blocks[0];
+    expect(block.kind).toBe("text");
+    if (block.kind === "text") {
+      expect(block.text).toBe("hello");
+      expect(block.done).toBe(true);
+    }
+  });
+
+  it("swallows listMessages errors and keeps empty state", async () => {
+    vi.spyOn(api, "listMessages").mockRejectedValue(new Error("boom"));
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    await waitFor(() => {
+      expect(result.current.userMessages).toEqual([]);
+    });
+    expect(result.current.chatStream.turns).toEqual([]);
+    expect(result.current.status).toBe("connecting");
+    expect(result.current.error).toBeNull();
   });
 
   it("reports disconnected on close", () => {

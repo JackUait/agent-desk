@@ -37,3 +37,6 @@ frontend/playwright-report/
 .pnp.*
 .worktrees/
 .superpowers/
+
+# Playwright CLI scratch
+.playwright-cli/

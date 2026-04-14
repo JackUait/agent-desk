@@ -3,6 +3,9 @@ package card
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
 func newTestService() *Service {
@@ -11,7 +14,7 @@ func newTestService() *Service {
 
 func TestCreateCard(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("my card")
+	c := svc.CreateCard("proj-test", "my card")
 	if c.Title != "my card" {
 		t.Fatalf("expected title 'my card', got %q", c.Title)
 	}
@@ -25,7 +28,7 @@ func TestCreateCard(t *testing.T) {
 
 func TestGetCard_found(t *testing.T) {
 	svc := newTestService()
-	created := svc.CreateCard("x")
+	created := svc.CreateCard("proj-test", "x")
 	got, err := svc.GetCard(created.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -45,9 +48,9 @@ func TestGetCard_notFound(t *testing.T) {
 
 func TestListCards(t *testing.T) {
 	svc := newTestService()
-	svc.CreateCard("a")
-	svc.CreateCard("b")
-	cards := svc.ListCards()
+	svc.CreateCard("proj-test", "a")
+	svc.CreateCard("proj-test", "b")
+	cards := svc.ListCards("proj-test")
 	if len(cards) != 2 {
 		t.Fatalf("expected 2 cards, got %d", len(cards))
 	}
@@ -55,7 +58,7 @@ func TestListCards(t *testing.T) {
 
 func TestDeleteCard(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("del me")
+	c := svc.CreateCard("proj-test", "del me")
 	if err := svc.DeleteCard(c.ID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +79,7 @@ func TestDeleteCard_notFound(t *testing.T) {
 
 func TestStartDevelopment_fromBacklog(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("dev card")
+	c := svc.CreateCard("proj-test", "dev card")
 	updated, err := svc.StartDevelopment(c.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -88,7 +91,7 @@ func TestStartDevelopment_fromBacklog(t *testing.T) {
 
 func TestStartDevelopment_invalidColumn(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID) // move to in_progress
 	_, err := svc.StartDevelopment(c.ID)
 	if err == nil {
@@ -98,7 +101,7 @@ func TestStartDevelopment_invalidColumn(t *testing.T) {
 
 func TestMoveToReview_fromInProgress(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID)
 	updated, err := svc.MoveToReview(c.ID)
 	if err != nil {
@@ -111,7 +114,7 @@ func TestMoveToReview_fromInProgress(t *testing.T) {
 
 func TestMoveToReview_invalidColumn(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	_, err := svc.MoveToReview(c.ID) // still in backlog
 	if err == nil {
 		t.Fatal("expected error transitioning from backlog to review")
@@ -120,7 +123,7 @@ func TestMoveToReview_invalidColumn(t *testing.T) {
 
 func TestRejectToInProgress_fromReview(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID)
 	svc.MoveToReview(c.ID)
 	updated, err := svc.RejectToInProgress(c.ID)
@@ -134,7 +137,7 @@ func TestRejectToInProgress_fromReview(t *testing.T) {
 
 func TestRejectToInProgress_invalidColumn(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	_, err := svc.RejectToInProgress(c.ID) // in backlog
 	if err == nil {
 		t.Fatal("expected error rejecting from non-review column")
@@ -143,7 +146,7 @@ func TestRejectToInProgress_invalidColumn(t *testing.T) {
 
 func TestSetPRUrl_inReview(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID)
 	svc.MoveToReview(c.ID)
 	updated, err := svc.SetPRUrl(c.ID, "https://github.com/org/repo/pull/1")
@@ -157,7 +160,7 @@ func TestSetPRUrl_inReview(t *testing.T) {
 
 func TestSetPRUrl_notInReview(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	_, err := svc.SetPRUrl(c.ID, "https://github.com/org/repo/pull/1")
 	if err == nil {
 		t.Fatal("expected error setting PR URL outside review")
@@ -166,7 +169,7 @@ func TestSetPRUrl_notInReview(t *testing.T) {
 
 func TestMoveToDone_withPRUrl(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID)
 	svc.MoveToReview(c.ID)
 	svc.SetPRUrl(c.ID, "https://github.com/org/repo/pull/1")
@@ -181,7 +184,7 @@ func TestMoveToDone_withPRUrl(t *testing.T) {
 
 func TestMoveToDone_noPRUrl(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	svc.StartDevelopment(c.ID)
 	svc.MoveToReview(c.ID)
 	_, err := svc.MoveToDone(c.ID)
@@ -195,7 +198,7 @@ func TestMoveToDone_noPRUrl(t *testing.T) {
 
 func TestMoveToDone_invalidColumn(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	_, err := svc.MoveToDone(c.ID) // in backlog
 	if err == nil {
 		t.Fatal("expected error moving to done from non-review column")
@@ -206,7 +209,7 @@ func TestMoveToDone_invalidColumn(t *testing.T) {
 
 func TestSetWorktree(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	updated, err := svc.SetWorktree(c.ID, "/tmp/wt", "feature/x")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -229,7 +232,7 @@ func TestSetWorktree_notFound(t *testing.T) {
 
 func TestSetSessionID(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	updated, err := svc.SetSessionID(c.ID, "sess-abc")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -251,7 +254,7 @@ func TestSetSessionID_notFound(t *testing.T) {
 
 func TestSetModel_happyPath(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	updated, err := svc.SetModel(c.ID, "claude-sonnet-4-6")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -271,7 +274,7 @@ func TestSetModel_happyPath(t *testing.T) {
 
 func TestSetModel_unknownModel(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	_, err := svc.SetModel(c.ID, "bogus-model")
 	if err == nil {
 		t.Fatal("expected error for unknown model")
@@ -289,11 +292,55 @@ func TestSetModel_unknownCard(t *testing.T) {
 	}
 }
 
+// --- SetEffort ---
+
+func TestSetEffort_HappyPath(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+	c := svc.CreateCard("proj-1", "Card")
+
+	updated, err := svc.SetEffort(c.ID, "high")
+	if err != nil {
+		t.Fatalf("SetEffort: unexpected error: %v", err)
+	}
+	if updated.Effort != "high" {
+		t.Errorf("returned Effort = %q, want %q", updated.Effort, "high")
+	}
+	got, _ := svc.GetCard(c.ID)
+	if got.Effort != "high" {
+		t.Errorf("persisted Effort = %q, want %q", got.Effort, "high")
+	}
+}
+
+func TestSetEffort_UnknownEffortRejected(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+	c := svc.CreateCard("proj-1", "Card")
+
+	_, err := svc.SetEffort(c.ID, "ultra")
+	if err == nil {
+		t.Fatalf("SetEffort(ultra): expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown effort") {
+		t.Errorf("error = %q, want containing %q", err.Error(), "unknown effort")
+	}
+}
+
+func TestSetEffort_UnknownCardRejected(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+
+	_, err := svc.SetEffort("no-such-card", "low")
+	if err == nil {
+		t.Fatalf("SetEffort(missing card): expected error, got nil")
+	}
+}
+
 // --- UpdateFields ---
 
 func TestUpdateFields_strings(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("original")
+	c := svc.CreateCard("proj-test", "original")
 	updated, err := svc.UpdateFields(c.ID, map[string]any{
 		"title":       "updated",
 		"description": "a description",
@@ -315,7 +362,7 @@ func TestUpdateFields_strings(t *testing.T) {
 
 func TestUpdateFields_slices(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("x")
+	c := svc.CreateCard("proj-test", "x")
 	updated, err := svc.UpdateFields(c.ID, map[string]any{
 		"acceptanceCriteria": []string{"ac1", "ac2"},
 		"relevantFiles":      []string{"file.go"},
@@ -333,7 +380,7 @@ func TestUpdateFields_slices(t *testing.T) {
 
 func TestUpdateFields_partial(t *testing.T) {
 	svc := newTestService()
-	c := svc.CreateCard("keep me")
+	c := svc.CreateCard("proj-test", "keep me")
 	updated, err := svc.UpdateFields(c.ID, map[string]any{
 		"description": "only this changed",
 	})
@@ -354,5 +401,361 @@ func TestUpdateFields_notFound(t *testing.T) {
 	_, err := svc.UpdateFields("ghost", map[string]any{"title": "x"})
 	if err == nil {
 		t.Fatal("expected error for missing card")
+	}
+}
+
+// --- Messages ---
+
+func TestService_AppendMessage_ErrorForUnknownCard(t *testing.T) {
+	svc := newTestService()
+	err := svc.AppendMessage("ghost", domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	if err == nil {
+		t.Fatal("expected error for missing card")
+	}
+}
+
+func TestService_ListMessages_ErrorForUnknownCard(t *testing.T) {
+	svc := newTestService()
+	_, err := svc.ListMessages("ghost")
+	if err == nil {
+		t.Fatal("expected error for missing card")
+	}
+}
+
+func TestService_ListMessages_ReturnsEmptySliceNotNil_ForNewCard(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("proj-test", "x")
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if msgs == nil {
+		t.Fatal("expected non-nil empty slice")
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected 0 messages, got %d", len(msgs))
+	}
+}
+
+// --- Summary / Blocked / Progress / Labels ---
+
+func TestSetSummary_HappyPath_StampsUpdatedAt(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	before := c.UpdatedAt
+	time.Sleep(1100 * time.Millisecond)
+
+	updated, err := svc.SetSummary(c.ID, "refactoring auth")
+	if err != nil {
+		t.Fatalf("SetSummary: %v", err)
+	}
+	if updated.Summary != "refactoring auth" {
+		t.Fatalf("summary = %q, want 'refactoring auth'", updated.Summary)
+	}
+	if updated.UpdatedAt <= before {
+		t.Fatalf("UpdatedAt not advanced: before=%d after=%d", before, updated.UpdatedAt)
+	}
+}
+
+func TestSetSummary_TooLong_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	long := strings.Repeat("a", 281)
+	_, err := svc.SetSummary(c.ID, long)
+	if err == nil {
+		t.Fatal("expected error for summary > 280 chars")
+	}
+}
+
+func TestSetSummary_Empty_Clears(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetSummary(c.ID, "temp")
+	updated, err := svc.SetSummary(c.ID, "")
+	if err != nil {
+		t.Fatalf("SetSummary empty: %v", err)
+	}
+	if updated.Summary != "" {
+		t.Fatalf("summary = %q, want empty", updated.Summary)
+	}
+}
+
+func TestSetBlocked_NonEmpty(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.SetBlocked(c.ID, "waiting on DB creds")
+	if err != nil {
+		t.Fatalf("SetBlocked: %v", err)
+	}
+	if updated.BlockedReason != "waiting on DB creds" {
+		t.Fatalf("reason = %q", updated.BlockedReason)
+	}
+}
+
+func TestSetBlocked_EmptyRejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetBlocked(c.ID, "")
+	if err == nil {
+		t.Fatal("expected error for empty reason")
+	}
+}
+
+func TestClearBlocked(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetBlocked(c.ID, "stuck")
+	updated, err := svc.ClearBlocked(c.ID)
+	if err != nil {
+		t.Fatalf("ClearBlocked: %v", err)
+	}
+	if updated.BlockedReason != "" {
+		t.Fatalf("reason = %q, want empty", updated.BlockedReason)
+	}
+}
+
+func TestSetProgress_HappyPath(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.SetProgress(c.ID, 2, 5, "writing tests")
+	if err != nil {
+		t.Fatalf("SetProgress: %v", err)
+	}
+	if updated.Progress == nil {
+		t.Fatal("expected non-nil Progress")
+	}
+	if updated.Progress.Step != 2 || updated.Progress.TotalSteps != 5 {
+		t.Fatalf("got step=%d total=%d", updated.Progress.Step, updated.Progress.TotalSteps)
+	}
+	if updated.Progress.CurrentStep != "writing tests" {
+		t.Fatalf("currentStep = %q", updated.Progress.CurrentStep)
+	}
+}
+
+func TestSetProgress_StepBeyondTotal_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, 6, 5, "oops")
+	if err == nil {
+		t.Fatal("expected error when step > totalSteps")
+	}
+}
+
+func TestSetProgress_ZeroTotal_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, 0, 0, "x")
+	if err == nil {
+		t.Fatal("expected error when totalSteps < 1")
+	}
+}
+
+func TestSetProgress_NegativeStep_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, -1, 3, "x")
+	if err == nil {
+		t.Fatal("expected error for negative step")
+	}
+}
+
+func TestClearProgress(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetProgress(c.ID, 1, 2, "x")
+	updated, err := svc.ClearProgress(c.ID)
+	if err != nil {
+		t.Fatalf("ClearProgress: %v", err)
+	}
+	if updated.Progress != nil {
+		t.Fatalf("expected nil Progress, got %+v", updated.Progress)
+	}
+}
+
+func TestAddLabel_TrimsAndDedupes(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddLabel(c.ID, "  bug  ")
+	updated, err := svc.AddLabel(c.ID, "bug")
+	if err != nil {
+		t.Fatalf("AddLabel: %v", err)
+	}
+	if len(updated.Labels) != 1 || updated.Labels[0] != "bug" {
+		t.Fatalf("labels = %v, want [bug]", updated.Labels)
+	}
+}
+
+func TestAddLabel_EmptyRejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.AddLabel(c.ID, "  ")
+	if err == nil {
+		t.Fatal("expected error for empty label")
+	}
+}
+
+func TestRemoveLabel(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddLabel(c.ID, "bug")
+	svc.AddLabel(c.ID, "urgent")
+	updated, err := svc.RemoveLabel(c.ID, "bug")
+	if err != nil {
+		t.Fatalf("RemoveLabel: %v", err)
+	}
+	if len(updated.Labels) != 1 || updated.Labels[0] != "urgent" {
+		t.Fatalf("labels = %v, want [urgent]", updated.Labels)
+	}
+}
+
+func TestRemoveLabel_Missing_NoError(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.RemoveLabel(c.ID, "ghost")
+	if err != nil {
+		t.Fatalf("RemoveLabel on missing label should be no-op, got: %v", err)
+	}
+}
+
+func TestUpdateFields_StampsUpdatedAt(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	before := c.UpdatedAt
+	time.Sleep(1100 * time.Millisecond)
+	updated, err := svc.UpdateFields(c.ID, map[string]any{"title": "new"})
+	if err != nil {
+		t.Fatalf("UpdateFields: %v", err)
+	}
+	if updated.UpdatedAt <= before {
+		t.Fatalf("UpdatedAt not advanced")
+	}
+}
+
+func TestUpdateFields_LabelsWhitelisted(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.UpdateFields(c.ID, map[string]any{
+		"labels": []string{"bug", "urgent"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateFields: %v", err)
+	}
+	if len(updated.Labels) != 2 {
+		t.Fatalf("labels = %v, want 2", updated.Labels)
+	}
+}
+
+func TestAddAcceptanceCriterion(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.AddAcceptanceCriterion(c.ID, "passes lint")
+	if err != nil {
+		t.Fatalf("AddAC: %v", err)
+	}
+	if len(updated.AcceptanceCriteria) != 1 || updated.AcceptanceCriteria[0] != "passes lint" {
+		t.Fatalf("AC = %v", updated.AcceptanceCriteria)
+	}
+}
+
+func TestRemoveAcceptanceCriterion(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddAcceptanceCriterion(c.ID, "a")
+	svc.AddAcceptanceCriterion(c.ID, "b")
+	svc.AddAcceptanceCriterion(c.ID, "c")
+	updated, err := svc.RemoveAcceptanceCriterion(c.ID, 1)
+	if err != nil {
+		t.Fatalf("RemoveAC: %v", err)
+	}
+	if len(updated.AcceptanceCriteria) != 2 || updated.AcceptanceCriteria[0] != "a" || updated.AcceptanceCriteria[1] != "c" {
+		t.Fatalf("AC = %v, want [a c]", updated.AcceptanceCriteria)
+	}
+}
+
+func TestRemoveAcceptanceCriterion_OutOfRange(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddAcceptanceCriterion(c.ID, "only")
+	_, err := svc.RemoveAcceptanceCriterion(c.ID, 7)
+	if err == nil {
+		t.Fatal("expected out-of-range error")
+	}
+}
+
+func TestSetColumn_DispatchesBacklogToInProgress(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.SetColumn(c.ID, ColumnInProgress)
+	if err != nil {
+		t.Fatalf("SetColumn: %v", err)
+	}
+	if updated.Column != ColumnInProgress {
+		t.Fatalf("column = %q", updated.Column)
+	}
+}
+
+func TestSetColumn_InProgressToReview(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.StartDevelopment(c.ID)
+	updated, err := svc.SetColumn(c.ID, ColumnReview)
+	if err != nil {
+		t.Fatalf("SetColumn: %v", err)
+	}
+	if updated.Column != ColumnReview {
+		t.Fatalf("column = %q", updated.Column)
+	}
+}
+
+func TestSetColumn_ReviewToInProgress(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.StartDevelopment(c.ID)
+	svc.MoveToReview(c.ID)
+	updated, err := svc.SetColumn(c.ID, ColumnInProgress)
+	if err != nil {
+		t.Fatalf("SetColumn: %v", err)
+	}
+	if updated.Column != ColumnInProgress {
+		t.Fatalf("column = %q", updated.Column)
+	}
+}
+
+func TestSetColumn_IllegalBacklogToDone(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetColumn(c.ID, ColumnDone)
+	if err == nil {
+		t.Fatal("expected illegal transition error")
+	}
+}
+
+func TestSetColumn_SameColumnNoop(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetColumn(c.ID, ColumnBacklog)
+	if err != nil {
+		t.Fatalf("SetColumn same column should be no-op, got: %v", err)
+	}
+}
+
+func TestService_AppendMessage_ThenListMessages(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("proj-test", "x")
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+	if err := svc.AppendMessage(c.ID, domain.Message{ID: "m2", Role: "assistant", Content: "hello", Timestamp: 1}); err != nil {
+		t.Fatalf("AppendMessage: %v", err)
+	}
+	msgs, err := svc.ListMessages(c.ID)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(msgs))
+	}
+	if msgs[0].Role != "user" || msgs[1].Role != "assistant" {
+		t.Fatalf("messages out of order: %+v", msgs)
 	}
 }

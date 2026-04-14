@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
 func TestStore_Create(t *testing.T) {
 	s := card.NewStore()
-	c := s.Create("Fix login bug")
+	c := s.Create("proj-test", "Fix login bug")
 
 	if c.ID == "" {
 		t.Error("expected non-empty ID")
@@ -26,16 +27,24 @@ func TestStore_Create(t *testing.T) {
 
 func TestStore_Create_UniqueIDs(t *testing.T) {
 	s := card.NewStore()
-	a := s.Create("Card A")
-	b := s.Create("Card B")
+	a := s.Create("proj-test", "Card A")
+	b := s.Create("proj-test", "Card B")
 	if a.ID == b.ID {
 		t.Errorf("expected unique IDs, both got %q", a.ID)
 	}
 }
 
+func TestStore_Create_AssignsProjectID(t *testing.T) {
+	s := card.NewStore()
+	c := s.Create("proj-1", "task")
+	if c.ProjectID != "proj-1" {
+		t.Errorf("expected ProjectID %q, got %q", "proj-1", c.ProjectID)
+	}
+}
+
 func TestStore_Get(t *testing.T) {
 	s := card.NewStore()
-	created := s.Create("My card")
+	created := s.Create("proj-test", "My card")
 
 	got, ok := s.Get(created.ID)
 	if !ok {
@@ -60,24 +69,40 @@ func TestStore_Get_NotFound(t *testing.T) {
 func TestStore_List(t *testing.T) {
 	s := card.NewStore()
 
-	cards := s.List()
+	cards := s.List("proj-test")
 	if len(cards) != 0 {
 		t.Errorf("expected empty list, got %d items", len(cards))
 	}
 
-	s.Create("Card 1")
-	s.Create("Card 2")
-	s.Create("Card 3")
+	s.Create("proj-test", "Card 1")
+	s.Create("proj-test", "Card 2")
+	s.Create("proj-test", "Card 3")
 
-	cards = s.List()
+	cards = s.List("proj-test")
 	if len(cards) != 3 {
 		t.Errorf("expected 3 cards, got %d", len(cards))
 	}
 }
 
+func TestStore_List_FiltersByProject(t *testing.T) {
+	s := card.NewStore()
+	s.Create("proj-a", "Card A1")
+	s.Create("proj-a", "Card A2")
+	s.Create("proj-b", "Card B1")
+
+	aCards := s.List("proj-a")
+	if len(aCards) != 2 {
+		t.Errorf("expected 2 cards in proj-a, got %d", len(aCards))
+	}
+	bCards := s.List("proj-b")
+	if len(bCards) != 1 {
+		t.Errorf("expected 1 card in proj-b, got %d", len(bCards))
+	}
+}
+
 func TestStore_Update(t *testing.T) {
 	s := card.NewStore()
-	created := s.Create("Original title")
+	created := s.Create("proj-test", "Original title")
 
 	updated := created
 	updated.Title = "Updated title"
@@ -103,7 +128,7 @@ func TestStore_Update(t *testing.T) {
 
 func TestStore_Update_PreservesCreatedAt(t *testing.T) {
 	s := card.NewStore()
-	created := s.Create("Card")
+	created := s.Create("proj-test", "Card")
 	original := created.CreatedAt
 
 	updated := created
@@ -126,7 +151,7 @@ func TestStore_Update_NotFound(t *testing.T) {
 
 func TestStore_Delete(t *testing.T) {
 	s := card.NewStore()
-	created := s.Create("To delete")
+	created := s.Create("proj-test", "To delete")
 
 	ok := s.Delete(created.ID)
 	if !ok {
@@ -144,6 +169,109 @@ func TestStore_Delete_NotFound(t *testing.T) {
 	ok := s.Delete("ghost")
 	if ok {
 		t.Error("expected Delete to return false for missing ID")
+	}
+}
+
+func TestStore_DeleteByProject(t *testing.T) {
+	s := card.NewStore()
+	a1 := s.Create("proj-a", "A1")
+	a2 := s.Create("proj-a", "A2")
+	b1 := s.Create("proj-b", "B1")
+
+	// Append messages to proj-a cards
+	s.AppendMessage(a1.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	s.AppendMessage(a2.ID, domain.Message{ID: "m2", Role: "user", Content: "hey", Timestamp: 1})
+
+	count := s.DeleteByProject("proj-a")
+	if count != 2 {
+		t.Errorf("expected DeleteByProject to return 2, got %d", count)
+	}
+
+	// proj-a cards should be gone
+	if _, ok := s.Get(a1.ID); ok {
+		t.Error("expected a1 to be deleted")
+	}
+	if _, ok := s.Get(a2.ID); ok {
+		t.Error("expected a2 to be deleted")
+	}
+	// messages should be gone too
+	if _, ok := s.ListMessages(a1.ID); ok {
+		t.Error("expected a1 messages to be deleted")
+	}
+	if _, ok := s.ListMessages(a2.ID); ok {
+		t.Error("expected a2 messages to be deleted")
+	}
+
+	// proj-b should be untouched
+	if _, ok := s.Get(b1.ID); !ok {
+		t.Error("expected b1 to still exist")
+	}
+}
+
+func TestStore_AppendMessage_ReturnsTrue_ForExistingCard(t *testing.T) {
+	s := card.NewStore()
+	c := s.Create("proj-test", "msg card")
+	ok := s.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	if !ok {
+		t.Fatal("expected AppendMessage to return true")
+	}
+}
+
+func TestStore_AppendMessage_ReturnsFalse_ForUnknownCard(t *testing.T) {
+	s := card.NewStore()
+	ok := s.AppendMessage("ghost", domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	if ok {
+		t.Fatal("expected AppendMessage to return false")
+	}
+}
+
+func TestStore_ListMessages_EmptyForNewCard(t *testing.T) {
+	s := card.NewStore()
+	c := s.Create("proj-test", "msg card")
+	msgs, ok := s.ListMessages(c.ID)
+	if !ok {
+		t.Fatal("expected ListMessages to return ok=true")
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("expected 0 messages, got %d", len(msgs))
+	}
+}
+
+func TestStore_ListMessages_ReturnsAppendedMessagesInOrder(t *testing.T) {
+	s := card.NewStore()
+	c := s.Create("proj-test", "msg card")
+	s.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	s.AppendMessage(c.ID, domain.Message{ID: "m2", Role: "assistant", Content: "hello", Timestamp: 1})
+	s.AppendMessage(c.ID, domain.Message{ID: "m3", Role: "user", Content: "bye", Timestamp: 2})
+	msgs, ok := s.ListMessages(c.ID)
+	if !ok {
+		t.Fatal("expected ListMessages to return ok=true")
+	}
+	if len(msgs) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(msgs))
+	}
+	if msgs[0].ID != "m1" || msgs[1].ID != "m2" || msgs[2].ID != "m3" {
+		t.Fatalf("messages out of order: %+v", msgs)
+	}
+}
+
+func TestStore_ListMessages_NotFoundForUnknownCard(t *testing.T) {
+	s := card.NewStore()
+	_, ok := s.ListMessages("ghost")
+	if ok {
+		t.Fatal("expected ListMessages to return ok=false for missing card")
+	}
+}
+
+func TestStore_Delete_ClearsMessages(t *testing.T) {
+	s := card.NewStore()
+	c := s.Create("proj-test", "msg card")
+	s.AppendMessage(c.ID, domain.Message{ID: "m1", Role: "user", Content: "hi", Timestamp: 1})
+	if !s.Delete(c.ID) {
+		t.Fatal("Delete failed")
+	}
+	if _, ok := s.ListMessages(c.ID); ok {
+		t.Fatal("expected ListMessages to return ok=false after Delete")
 	}
 }
 

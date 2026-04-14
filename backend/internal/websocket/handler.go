@@ -3,26 +3,104 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/mcp"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 	gowebsocket "nhooyr.io/websocket"
 )
 
-// Handler wires WebSocket connections to the Hub and Agent Manager.
-type Handler struct {
-	hub     *Hub
-	manager *agent.Manager
-	cardSvc *card.Service
+// AttachmentLister is the subset of attachment.Service the WS handler needs
+// to resolve filenames → (size, mime) when wrapping the agent message.
+type AttachmentLister interface {
+	List(cardID string) ([]attachment.Attachment, error)
 }
 
-// NewHandler returns a Handler.
-func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service) *Handler {
-	return &Handler{hub: hub, manager: manager, cardSvc: cardSvc}
+type attachmentLookup func(cardID, name string) (agent.AttachmentInfo, bool)
+
+// buildAgentMessage drains any pending user edits for cardID and, if there
+// are any, wraps message in the card-edits-since-last-turn block.
+// lookup resolves added filenames to size + mime for the wrapper; pass nil
+// to emit a flag-only note.
+func buildAgentMessage(svc *card.Service, cardID, message string, lookup attachmentLookup) string {
+	flags, diffAny := svc.DrainDirty(cardID)
+	if len(flags) == 0 {
+		return message
+	}
+	var added []agent.AttachmentInfo
+	var removed []string
+	if d, ok := diffAny.(card.AttachmentDiff); ok {
+		removed = d.Removed
+		for _, name := range d.Added {
+			if lookup != nil {
+				if info, found := lookup(cardID, name); found {
+					added = append(added, info)
+					continue
+				}
+			}
+			added = append(added, agent.AttachmentInfo{Name: name})
+		}
+	}
+	return agent.WrapUserMessage(message, flags, added, removed)
+}
+
+// Handler wires WebSocket connections to the Hub and Agent Manager.
+type Handler struct {
+	hub          *Hub
+	manager      *agent.Manager
+	cardSvc      *card.Service
+	projectStore *project.Store
+	sessions     *mcp.Sessions
+	mcpPort      int
+	attachments  AttachmentLister
+}
+
+// NewHandler returns a Handler. sessions and mcpPort may be nil/0; when both
+// are configured the handler mints a per-turn MCP session token and writes a
+// temp .mcp.json that the spawned agent uses to call back into the local
+// MCP server. attachments may be nil; when non-nil it resolves attachment
+// filenames to size+mime when wrapping agent messages.
+func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store, sessions *mcp.Sessions, mcpPort int, attachments AttachmentLister) *Handler {
+	return &Handler{
+		hub:          hub,
+		manager:      manager,
+		cardSvc:      cardSvc,
+		projectStore: projectStore,
+		sessions:     sessions,
+		mcpPort:      mcpPort,
+		attachments:  attachments,
+	}
+}
+
+// attachmentLookupFn returns a closure that resolves a filename for a given
+// cardID to its AttachmentInfo by querying the AttachmentLister. Returns a
+// name-only stub when attachments is nil or the file is not found.
+func (h *Handler) attachmentLookupFn() attachmentLookup {
+	return func(cardID, name string) (agent.AttachmentInfo, bool) {
+		if h.attachments == nil {
+			return agent.AttachmentInfo{Name: name}, true
+		}
+		list, err := h.attachments.List(cardID)
+		if err != nil {
+			return agent.AttachmentInfo{Name: name}, false
+		}
+		for _, a := range list {
+			if a.Name == name {
+				return agent.AttachmentInfo{Name: a.Name, Size: a.Size, MIMEType: a.MIMEType}, true
+			}
+		}
+		return agent.AttachmentInfo{Name: name}, false
+	}
 }
 
 // HandleWebSocket upgrades the HTTP connection for card {id} to WebSocket,
@@ -74,13 +152,56 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// sendToAgent spawns a per-message Claude CLI process and bridges events.
 	sendToAgent := func(message string) {
 		c, _ = h.cardSvc.GetCard(cardID)
+		var workDir string
+		if proj, ok := h.projectStore.Get(c.ProjectID); ok {
+			workDir = proj.Path
+		}
+
+		var (
+			mcpConfigPath string
+			mcpToken      string
+		)
+		if h.sessions != nil && h.mcpPort > 0 {
+			mcpToken = h.sessions.Mint(cardID)
+			cfgPath, cfgErr := writeMcpConfig(cardID, mcpToken, h.mcpPort)
+			if cfgErr != nil {
+				log.Printf("ws: mcp config write failed for card %s: %v", cardID, cfgErr)
+			} else {
+				mcpConfigPath = cfgPath
+			}
+		}
+
+		// cleanupMcp revokes the per-turn token + removes the temp config.
+		// Safe to call even if no token was minted.
+		cleanupMcp := func() {
+			if mcpToken != "" {
+				h.sessions.Revoke(mcpToken)
+			}
+			if mcpConfigPath != "" {
+				_ = os.Remove(mcpConfigPath)
+			}
+		}
+
+		wrappedMessage := buildAgentMessage(h.cardSvc, cardID, message, h.attachmentLookupFn())
 		events := make(chan agent.StreamEvent, 64)
-		if sendErr := h.manager.Send(cardID, c.SessionID, c.Model, message, events); sendErr != nil {
+		if sendErr := h.manager.Send(agent.SendRequest{
+			CardID:        cardID,
+			SessionID:     c.SessionID,
+			Model:         c.Model,
+			Effort:        c.Effort,
+			Message:       wrappedMessage,
+			WorkDir:       workDir,
+			McpConfigPath: mcpConfigPath,
+		}, events); sendErr != nil {
 			log.Printf("ws: send error for card %s: %v", cardID, sendErr)
 			h.broadcastError(cardID, sendErr.Error())
+			cleanupMcp()
 			return
 		}
-		go h.StartEventBridge(cardID, events)
+		go func() {
+			h.StartEventBridge(cardID, events)
+			cleanupMcp()
+		}()
 	}
 
 	// Reader loop: WebSocket messages → agent/service actions.
@@ -94,6 +215,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Type    string `json:"type"`
 			Content string `json:"content"`
 			Model   string `json:"model,omitempty"`
+			Effort  string `json:"effort,omitempty"`
 		}
 		if jsonErr := json.Unmarshal(data, &msg); jsonErr != nil {
 			continue
@@ -114,6 +236,27 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 				h.broadcastCard(cardID, updated)
 			}
+			if msg.Effort != "" {
+				if !agent.IsAllowedEffort(msg.Effort) {
+					h.broadcastError(cardID, "unknown effort: "+msg.Effort)
+					break
+				}
+				updated, svcErr := h.cardSvc.SetEffort(cardID, msg.Effort)
+				if svcErr != nil {
+					log.Printf("ws: SetEffort error for card %s: %v", cardID, svcErr)
+					h.broadcastError(cardID, svcErr.Error())
+					break
+				}
+				h.broadcastCard(cardID, updated)
+			}
+			if err := h.cardSvc.AppendMessage(cardID, domain.Message{
+				ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+				Role:      "user",
+				Content:   msg.Content,
+				Timestamp: time.Now().Unix(),
+			}); err != nil {
+				log.Printf("ws: AppendMessage (user) for card %s: %v", cardID, err)
+			}
 			sendToAgent(msg.Content)
 
 		case "start":
@@ -128,6 +271,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		case "approve":
 			sendToAgent("Create a PR now.")
+
+		case "stop":
+			if killErr := h.manager.Kill(cardID); killErr != nil {
+				log.Printf("ws: Kill error for card %s: %v", cardID, killErr)
+				h.broadcastError(cardID, killErr.Error())
+			}
 
 		case "merge":
 			updated, svcErr := h.cardSvc.MoveToDone(cardID)
@@ -191,6 +340,16 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 				} else {
 					c, _ := h.cardSvc.GetCard(cardID)
 					h.broadcastCard(cardID, c)
+				}
+			}
+			if ev.Text != "" {
+				if err := h.cardSvc.AppendMessage(cardID, domain.Message{
+					ID:        fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+					Role:      "assistant",
+					Content:   ev.Text,
+					Timestamp: time.Now().Unix(),
+				}); err != nil {
+					log.Printf("ws: AppendMessage (assistant) for card %s: %v", cardID, err)
 				}
 			}
 
@@ -319,5 +478,33 @@ func (h *Handler) broadcastCard(cardID string, c card.Card) {
 // RegisterRoutes mounts the WebSocket handler.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/cards/{id}/ws", h.HandleWebSocket)
+}
+
+// writeMcpConfig serialises a minimal Claude CLI .mcp.json that points the
+// spawned agent at the local MCP HTTP server with the per-turn session
+// token. The caller owns the returned path and is responsible for removing
+// it once the turn completes.
+func writeMcpConfig(cardID, token string, port int) (string, error) {
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"agent_desk": map[string]any{
+				"type": "http",
+				"url":  fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", port, token),
+			},
+		},
+	}
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp("", "agent-desk-mcp-"+cardID+"-*.json")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(payload); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 

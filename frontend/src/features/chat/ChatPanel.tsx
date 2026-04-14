@@ -5,33 +5,69 @@ import { ChatMessage } from "./ChatMessage";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolUseBlock } from "./ToolUseBlock";
 import { TextBlock } from "./TextBlock";
-import { ModelChooser } from "./ModelChooser";
+import { ModelChooser, type ModelSelection } from "./ModelChooser";
+import type { Effort } from "./useModels";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 interface ChatPanelProps {
   userMessages: Message[];
   chatStream: ChatStreamState;
-  onSend: (content: string, model: string) => void;
+  onSend: (content: string, model: string, effort: string) => void;
+  onStop?: () => void;
   models: Model[];
   cardModel: string;
+  cardEffort: string;
   readOnly?: boolean;
 }
 
 const DEFAULT_MODEL = "claude-opus-4-6";
-const LAST_MODEL_KEY = "agentDesk.lastModel";
+const DEFAULT_EFFORT: Effort = "medium";
+const LAST_SELECTION_KEY = "agentDesk.lastSelection";
+const LEGACY_LAST_MODEL_KEY = "agentDesk.lastModel";
 
-function initialSelectedModel(cardModel: string, models: Model[]): string {
-  if (cardModel) return cardModel;
+function isValidEffort(e: string): e is Effort {
+  return e === "low" || e === "medium" || e === "high" || e === "max";
+}
+
+function initialSelection(
+  cardModel: string,
+  cardEffort: string,
+  models: Model[],
+): ModelSelection {
+  // Priority 1: both card fields set
+  if (cardModel && cardEffort && isValidEffort(cardEffort)) {
+    return { model: cardModel, effort: cardEffort };
+  }
+  // Priority 2: new localStorage key
   try {
-    const stored = window.localStorage.getItem(LAST_MODEL_KEY);
-    if (stored && models.some((m) => m.id === stored)) {
-      return stored;
+    const stored = window.localStorage.getItem(LAST_SELECTION_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<ModelSelection>;
+      if (
+        parsed &&
+        typeof parsed.model === "string" &&
+        models.some((m) => m.id === parsed.model) &&
+        typeof parsed.effort === "string" &&
+        isValidEffort(parsed.effort)
+      ) {
+        return { model: parsed.model, effort: parsed.effort };
+      }
     }
   } catch {
     /* ignore */
   }
-  return DEFAULT_MODEL;
+  // Priority 3: legacy migration
+  try {
+    const legacy = window.localStorage.getItem(LEGACY_LAST_MODEL_KEY);
+    if (legacy && models.some((m) => m.id === legacy)) {
+      return { model: legacy, effort: DEFAULT_EFFORT };
+    }
+  } catch {
+    /* ignore */
+  }
+  // Priority 4: hard default
+  return { model: DEFAULT_MODEL, effort: DEFAULT_EFFORT };
 }
 
 function formatDuration(ms: number): string {
@@ -102,13 +138,15 @@ export function ChatPanel({
   userMessages,
   chatStream,
   onSend,
+  onStop,
   models,
   cardModel,
+  cardEffort,
   readOnly,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
-  const [selectedModel, setSelectedModel] = useState<string>(() =>
-    initialSelectedModel(cardModel, models),
+  const [selection, setSelection] = useState<ModelSelection>(() =>
+    initialSelection(cardModel, cardEffort, models),
   );
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollKey = scrollSignature(userMessages, chatStream);
@@ -117,22 +155,30 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [scrollKey]);
 
-  // Re-sync selected model when the card's persisted model changes
-  // (e.g. a card_update broadcast). Depending only on cardModel here is
-  // intentional: local user edits to selectedModel must not be clobbered.
+  // Re-sync selection when the card's persisted fields change
+  // (e.g. a card_update broadcast). Depending on both fields here is
+  // intentional: local user edits must not be clobbered.
   useEffect(() => {
-    if (cardModel) {
-      setSelectedModel((current) => (current === cardModel ? current : cardModel));
+    if (cardModel && cardEffort && isValidEffort(cardEffort)) {
+      setSelection((current) =>
+        current.model === cardModel && current.effort === cardEffort
+          ? current
+          : { model: cardModel, effort: cardEffort },
+      );
     }
-  }, [cardModel]);
+  }, [cardModel, cardEffort]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || readOnly) return;
-    onSend(trimmed, selectedModel);
+    onSend(trimmed, selection.model, selection.effort);
     try {
-      window.localStorage.setItem(LAST_MODEL_KEY, selectedModel);
+      window.localStorage.setItem(
+        LAST_SELECTION_KEY,
+        JSON.stringify(selection),
+      );
+      window.localStorage.removeItem(LEGACY_LAST_MODEL_KEY);
     } catch {
       /* ignore */
     }
@@ -174,33 +220,55 @@ export function ChatPanel({
         <div ref={bottomRef} />
       </div>
       <form
-        className="border-t border-border-card bg-bg-card p-3 flex flex-col gap-2"
+        className="border-t border-border-card bg-bg-card p-3"
         onSubmit={handleSubmit}
       >
-        <Textarea
-          className="min-h-[44px] max-h-[180px] flex-1 resize-none"
-          placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={readOnly}
-          aria-label="Message input"
-        />
-        <div className="flex items-end gap-2">
-          <ModelChooser
-            models={models}
-            value={selectedModel}
-            onChange={setSelectedModel}
-            disabled={readOnly || chatStream.turnInFlight}
+        <div className="flex flex-col gap-2 rounded-lg border border-border-card bg-bg-page focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+          <Textarea
+            className="min-h-[60px] max-h-[180px] resize-none rounded-none border-0 bg-transparent px-3 pt-2.5 pb-0 shadow-none focus-visible:border-0 focus-visible:ring-0"
+            placeholder="Type a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={readOnly}
+            aria-label="Message input"
+            rows={3}
           />
-          <Button
-            type="submit"
-            size="sm"
-            data-testid="send-button"
-            disabled={readOnly || !input.trim()}
-          >
-            Send
-          </Button>
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <ModelChooser
+              models={models}
+              value={selection}
+              onChange={setSelection}
+              disabled={readOnly || chatStream.turnInFlight}
+            />
+            <div className="flex items-center gap-1.5">
+              {chatStream.turnInFlight && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  data-testid="stop-button"
+                  onClick={() => onStop?.()}
+                  disabled={!onStop}
+                  aria-label="Stop agent"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-2 rounded-[1px] bg-current"
+                  />
+                  Stop
+                </Button>
+              )}
+              <Button
+                type="submit"
+                size="sm"
+                data-testid="send-button"
+                disabled={readOnly || !input.trim()}
+              >
+                Send
+              </Button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
