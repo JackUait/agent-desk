@@ -6,17 +6,28 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	ws "github.com/jackuait/agent-desk/backend/internal/websocket"
 	"github.com/jackuait/agent-desk/backend/pkg/middleware"
 )
+
+type projectCascade struct {
+	cardSvc     *card.Service
+	worktreeMgr *worktree.Manager
+}
+
+func (c *projectCascade) DeleteByProject(projectID string) {
+	c.cardSvc.DeleteByProject(projectID)
+	c.worktreeMgr.Remove(projectID)
+}
 
 func main() {
 	mux := http.NewServeMux()
@@ -26,22 +37,27 @@ func main() {
 		w.Write([]byte("ok\n"))
 	})
 
+	projectStore := project.NewStore(project.NewRealGit())
+	picker := project.NewPicker(runtime.GOOS, project.ExecRunner{})
+
 	cardStore := card.NewStore()
 	cardSvc := card.NewService(cardStore)
 
+	worktreeMgr := worktree.NewManager()
 	agentMgr := agent.NewManager("claude")
 
-	cwd, _ := os.Getwd()
-	worktreeBase := filepath.Join(filepath.Dir(cwd), "agent-desk-worktrees")
-	worktreeSvc := worktree.NewService(cwd, worktreeBase)
+	cascade := &projectCascade{cardSvc: cardSvc, worktreeMgr: worktreeMgr}
+	projectHandler := project.NewHandler(projectStore, picker, cascade)
+	projectHandler.RegisterRoutes(mux)
 
-	cardHandler := card.NewHandler(cardSvc, agentMgr, worktreeSvc)
+	cardHandler := card.NewHandler(cardSvc, agentMgr, worktreeMgr, projectStore)
 	cardHandler.RegisterRoutes(mux)
 
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
+
 	wsHub := ws.NewHub()
-	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc)
+	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore)
 	wsHandler.RegisterRoutes(mux)
 
 	modelsHandler := agent.NewModelsHandler()
