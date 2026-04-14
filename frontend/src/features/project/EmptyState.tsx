@@ -19,9 +19,9 @@ export function EmptyState({ onPickFolder }: Props) {
 
   return (
     <div className="flex h-full w-full items-center justify-center bg-bg-page px-6">
-      <div className="flex w-full max-w-[440px] flex-col items-center gap-5 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border-card bg-bg-card text-text-secondary">
-          <FolderOpenIcon width={22} height={22} />
+      <div className="flex w-full max-w-[380px] flex-col items-center gap-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border-card bg-bg-card text-text-secondary">
+          <FolderOpenIcon width={32} height={32} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -31,7 +31,7 @@ export function EmptyState({ onPickFolder }: Props) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="relative inline-flex items-center">
           <button
             type="button"
             onClick={onPickFolder}
@@ -39,7 +39,7 @@ export function EmptyState({ onPickFolder }: Props) {
           >
             Choose folder
           </button>
-          <div className="flex items-center gap-1 text-[11px] text-text-muted">
+          <div className="pointer-events-none absolute left-full ml-3 flex items-center gap-1 text-[11px] text-text-muted">
             <Kbd>⌘</Kbd>
             <Kbd>O</Kbd>
           </div>

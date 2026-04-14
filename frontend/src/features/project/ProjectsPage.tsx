@@ -150,6 +150,16 @@ export function ProjectsPage() {
 
   const deleteTarget = projects.find((p) => p.id === toDelete);
 
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-screen bg-bg-page">
+        <main className="flex-1 overflow-y-auto">
+          <EmptyState onPickFolder={createProject} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-bg-page">
       <SettingsButton />
@@ -160,26 +170,22 @@ export function ProjectsPage() {
         onSelect={handleSelect}
       />
       <main ref={scrollRef} className="flex-1 overflow-y-auto">
-        {projects.length === 0 ? (
-          <EmptyState onPickFolder={createProject} />
-        ) : (
-          <div className="flex flex-col gap-16 py-12 pl-12 pr-12">
-            {projects.map((p) => (
-              <ProjectBoard
-                key={p.id}
-                project={p}
-                board={boardsByProject[p.id] ?? { id: "", title: "", columns: [] }}
-                cards={cardsByProject[p.id] ?? {}}
-                onNewCard={async (pid, position) => {
-                  const card = await createCardInProject(pid, "New Card", position);
-                  if (settings.autoOpenNewCards) selectCard(card.id);
-                }}
-                onRename={(title) => renameProject(p.id, title)}
-                onCardClick={(id) => selectCard(id)}
-              />
-            ))}
-          </div>
-        )}
+        <div className="flex flex-col gap-16 py-12 pl-12 pr-12">
+          {projects.map((p) => (
+            <ProjectBoard
+              key={p.id}
+              project={p}
+              board={boardsByProject[p.id] ?? { id: "", title: "", columns: [] }}
+              cards={cardsByProject[p.id] ?? {}}
+              onNewCard={async (pid, position) => {
+                const card = await createCardInProject(pid, "New Card", position);
+                if (settings.autoOpenNewCards) selectCard(card.id);
+              }}
+              onRename={(title) => renameProject(p.id, title)}
+              onCardClick={(id) => selectCard(id)}
+            />
+          ))}
+        </div>
       </main>
       {selectedCard && (
         <CardModalWrapper
