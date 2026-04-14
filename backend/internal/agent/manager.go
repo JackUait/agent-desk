@@ -50,10 +50,12 @@ func NewManagerWithBuilder(claudeBin string, builder commandBuilder) *Manager {
 	}
 }
 
-// buildArgs assembles the Claude CLI argv for a given session/model/message.
+// buildArgs assembles the Claude CLI argv for a given session/model/effort/message.
 // Non-empty sessionID appends --resume <id>; non-empty model appends
-// --model <id>. The prompt is always the final positional argument.
-func buildArgs(sessionID, model, message string) []string {
+// --model <id>; non-empty effort appends --effort <level>. The prompt is
+// always the final positional argument. Order: --model before --effort
+// before prompt.
+func buildArgs(sessionID, model, effort, message string) []string {
 	args := []string{
 		"-p",
 		"--verbose",
@@ -67,6 +69,9 @@ func buildArgs(sessionID, model, message string) []string {
 	if model != "" {
 		args = append(args, "--model", model)
 	}
+	if effort != "" {
+		args = append(args, "--effort", effort)
+	}
 	args = append(args, message)
 	return args
 }
@@ -76,6 +81,7 @@ type SendRequest struct {
 	CardID    string
 	SessionID string
 	Model     string
+	Effort    string
 	Message   string
 	WorkDir   string // absolute path to the project repo
 }
@@ -83,9 +89,11 @@ type SendRequest struct {
 // Send spawns a Claude CLI process in print mode for req.CardID in req.WorkDir
 // and streams parsed events to the events channel. If req.SessionID is
 // non-empty, --resume is used to continue the conversation. If req.Model is
-// non-empty, --model <id> is added before the positional prompt. The channel
-// is closed when the process exits. An empty WorkDir is allowed and means
-// "inherit server cwd" — useful for tests.
+// non-empty, --model <id> is added before the positional prompt. If
+// req.Effort is non-empty, --effort <level> is added after --model and
+// before the positional prompt. The channel is closed when the process
+// exits. An empty WorkDir is allowed and means "inherit server cwd" — useful
+// for tests.
 func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	m.mu.Lock()
 	if m.running[req.CardID] {
@@ -95,7 +103,7 @@ func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	m.running[req.CardID] = true
 	m.mu.Unlock()
 
-	args := buildArgs(req.SessionID, req.Model, req.Message)
+	args := buildArgs(req.SessionID, req.Model, req.Effort, req.Message)
 	cmd := m.builder(m.claudeBin, args, req.WorkDir)
 
 	stdout, err := cmd.StdoutPipe()

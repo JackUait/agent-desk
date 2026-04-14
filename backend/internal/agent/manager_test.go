@@ -226,6 +226,70 @@ func TestManager_Send_WithoutModel(t *testing.T) {
 	}
 }
 
+// TestSend_NonEmptyEffortAddsFlag verifies a non-empty Effort on the
+// SendRequest threads through to --effort <level> in the argv.
+func TestSend_NonEmptyEffortAddsFlag(t *testing.T) {
+	var capturedArgs []string
+	builder := func(bin string, args []string, dir string) *exec.Cmd {
+		capturedArgs = args
+		// Use `true` binary so process exits immediately.
+		return exec.Command("true")
+	}
+	m := agent.NewManagerWithBuilder("claude", builder)
+
+	events := make(chan agent.StreamEvent, 4)
+	if err := m.Send(agent.SendRequest{
+		CardID:  "card-1",
+		Model:   "claude-sonnet-4-6",
+		Effort:  "max",
+		Message: "ping",
+	}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	found := false
+	for i, a := range capturedArgs {
+		if a == "--effort" && i+1 < len(capturedArgs) && capturedArgs[i+1] == "max" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("argv missing --effort max; got %v", capturedArgs)
+	}
+}
+
+// TestSend_EmptyEffortOmitsFlag verifies an empty Effort on the SendRequest
+// produces no --effort flag in the argv.
+func TestSend_EmptyEffortOmitsFlag(t *testing.T) {
+	var capturedArgs []string
+	builder := func(bin string, args []string, dir string) *exec.Cmd {
+		capturedArgs = args
+		return exec.Command("true")
+	}
+	m := agent.NewManagerWithBuilder("claude", builder)
+
+	events := make(chan agent.StreamEvent, 4)
+	if err := m.Send(agent.SendRequest{
+		CardID:  "card-1",
+		Model:   "claude-opus-4-6",
+		Effort:  "",
+		Message: "ping",
+	}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	for range events {
+	}
+
+	for _, a := range capturedArgs {
+		if a == "--effort" {
+			t.Errorf("unexpected --effort in argv: %v", capturedArgs)
+		}
+	}
+}
+
 // TestManager_IsRunning verifies a process is tracked while active.
 func TestManager_IsRunning(t *testing.T) {
 	m := agent.NewManager(hangBin(t))
