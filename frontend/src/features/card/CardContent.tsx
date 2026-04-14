@@ -48,7 +48,7 @@ export function CardContent({ card, projectTitle, onApprove, onMerge, onUpdate, 
       <EditableTitle value={card.title} onChange={(title) => onUpdate({ title })} />
 
       {card.summary && (
-        <p className="text-sm italic text-text-secondary m-0">{card.summary}</p>
+        <p className="text-sm text-text-secondary m-0">{card.summary}</p>
       )}
 
       {card.progress && (

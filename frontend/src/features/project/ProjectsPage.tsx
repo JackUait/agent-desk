@@ -7,6 +7,7 @@ import { DeleteProjectDialog } from "./DeleteProjectDialog";
 import { CardModal } from "../card";
 import { useCardSocket } from "../../shared/api/useCardSocket";
 import { useModels } from "../chat";
+import { SettingsButton, useSettings } from "../settings";
 import type { Card, Model } from "../../shared/types/domain";
 
 function CardModalWrapper({
@@ -111,6 +112,7 @@ export function ProjectsPage() {
     moveCardToColumn,
   } = useProjects();
   const { models } = useModels();
+  const { settings } = useSettings();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [toDelete, setToDelete] = useState<string | null>(null);
@@ -150,6 +152,7 @@ export function ProjectsPage() {
 
   return (
     <div className="flex h-screen bg-bg-page">
+      <SettingsButton />
       <ProjectSidebar
         projects={projects}
         activeId={activeProjectId}
@@ -167,7 +170,10 @@ export function ProjectsPage() {
                 project={p}
                 board={boardsByProject[p.id] ?? { id: "", title: "", columns: [] }}
                 cards={cardsByProject[p.id] ?? {}}
-                onNewCard={(pid, position) => createCardInProject(pid, "New Card", position)}
+                onNewCard={async (pid, position) => {
+                  const card = await createCardInProject(pid, "New Card", position);
+                  if (settings.autoOpenNewCards) selectCard(card.id);
+                }}
                 onRename={(title) => renameProject(p.id, title)}
                 onCardClick={(id) => selectCard(id)}
               />
