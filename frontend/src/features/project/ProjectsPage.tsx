@@ -220,7 +220,7 @@ export function ProjectsPage() {
               board={boardsByProject[p.id] ?? { id: "", title: "", columns: [] }}
               cards={cardsByProject[p.id] ?? {}}
               onNewCard={async (pid, position) => {
-                const card = await createCardInProject(pid, "New Card", position);
+                const card = await createCardInProject(pid, "", position);
                 if (settings.autoOpenNewCards || selectedCardId) selectCard(card.id);
               }}
               onRename={(title) => renameProject(p.id, title)}

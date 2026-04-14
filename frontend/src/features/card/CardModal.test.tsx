@@ -119,6 +119,22 @@ describe("CardModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("side-peek does not close when clicking the description (which swaps to a textarea)", async () => {
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    await userEvent.click(screen.getByText("Add JWT-based authentication"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("side-peek does not close when interacting with a portal'd menu opened from inside", async () => {
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    await userEvent.click(screen.getByTestId("model-chooser"));
+    const subTrigger = await screen.findByText("Sonnet 4.6");
+    await userEvent.click(subTrigger);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("side-peek closes when clicking outside on a non-exempt element", async () => {
     const onClose = vi.fn();
     render(

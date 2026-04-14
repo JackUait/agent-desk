@@ -45,7 +45,11 @@ export function CardContent({ card, projectTitle, onApprove, onMerge, onUpdate, 
 
       <LabelChips labels={card.labels} />
 
-      <EditableTitle value={card.title} onChange={(title) => onUpdate({ title })} />
+      <EditableTitle
+        value={card.title}
+        placeholder="New Card"
+        onChange={(title) => onUpdate({ title })}
+      />
 
       {card.summary && (
         <p className="text-sm text-text-secondary m-0">{card.summary}</p>

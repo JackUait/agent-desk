@@ -43,8 +43,13 @@ export function KanbanCard({
         isWorking && "working",
       )}
     >
-      <h3 className="text-[13px] font-medium leading-snug text-text-primary">
-        {card.title}
+      <h3
+        className={cn(
+          "text-[13px] font-medium leading-snug",
+          card.title ? "text-text-primary" : "text-text-muted",
+        )}
+      >
+        {card.title || "New Card"}
       </h3>
       {(card.summary || card.description) && (
         <p className="text-[12px] leading-snug text-text-secondary line-clamp-2">

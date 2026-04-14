@@ -53,15 +53,29 @@ export function CardModal({
 
   useEffect(() => {
     if (!isSidePeek) return;
-    const handler = (event: MouseEvent) => {
+    const SAFE_SELECTOR =
+      '[data-testid="card-preview-root"],[data-sidepeek-safe],[role="menu"],[role="menuitem"],[role="dialog"],[role="listbox"],[role="option"],[role="tooltip"]';
+    let startedInside = false;
+    const onDown = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-testid="card-preview-root"]')) return;
-      if (target.closest("[data-sidepeek-safe]")) return;
+      startedInside =
+        target instanceof Element && !!target.closest(SAFE_SELECTOR);
+    };
+    const onClick = (event: MouseEvent) => {
+      if (startedInside) {
+        startedInside = false;
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Element && target.closest(SAFE_SELECTOR)) return;
       onClose();
     };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("click", onClick);
+    };
   }, [isSidePeek, onClose]);
 
   return (
