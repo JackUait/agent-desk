@@ -244,6 +244,17 @@ func (s *Service) Rename(path, newName string) (string, error) {
 	return newPath, nil
 }
 
+func (s *Service) Delete(path string) error {
+	resolved, err := ResolveWritable(path, s.roots)
+	if err != nil {
+		return err
+	}
+	if filepath.Base(resolved) == "SKILL.md" {
+		return os.RemoveAll(filepath.Dir(resolved))
+	}
+	return os.Remove(resolved)
+}
+
 func containingEntry(target string, kind ItemKind) string {
 	if kind == KindSkill {
 		return filepath.Dir(target)

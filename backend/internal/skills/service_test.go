@@ -173,3 +173,28 @@ func TestServiceRename(t *testing.T) {
 		t.Error("expected collision error")
 	}
 }
+
+func TestServiceDelete(t *testing.T) {
+	tmp := t.TempDir()
+	skillsRoot := filepath.Join(tmp, "skills")
+	writeFile(t, filepath.Join(skillsRoot, "victim", "SKILL.md"), "body")
+
+	svc := NewService(Roots{Writable: []string{skillsRoot}})
+	path := filepath.Join(skillsRoot, "victim", "SKILL.md")
+	if err := svc.Delete(path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(skillsRoot, "victim")); !os.IsNotExist(err) {
+		t.Error("dir still exists")
+	}
+
+	pluginFile := filepath.Join(tmp, "plugins", "cache", "p", "1", "skills", "a", "SKILL.md")
+	writeFile(t, pluginFile, "body")
+	svcWithPlugin := NewService(Roots{
+		Writable: []string{skillsRoot},
+		Readable: []string{filepath.Join(tmp, "plugins", "cache", "p", "1", "skills")},
+	})
+	if err := svcWithPlugin.Delete(pluginFile); err == nil {
+		t.Error("expected rejection for plugin delete")
+	}
+}
