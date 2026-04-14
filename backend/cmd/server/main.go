@@ -57,12 +57,12 @@ func main() {
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
 
+	wsHub := ws.NewHub()
+
 	mcpSessions := mcp.NewSessions()
-	mcpHandler := mcp.NewServer(cardSvc, mcpSessions)
+	mcpHandler := mcp.NewServer(cardSvc, mcpSessions, wsHub)
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
-
-	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, mcpSessions, 8080)
 	wsHandler.RegisterRoutes(mux)
 

@@ -9,6 +9,20 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/card"
 )
 
+type fakeBroadcaster struct {
+	calls []struct {
+		cardID string
+		msg    []byte
+	}
+}
+
+func (f *fakeBroadcaster) Broadcast(cardID string, msg []byte) {
+	f.calls = append(f.calls, struct {
+		cardID string
+		msg    []byte
+	}{cardID, msg})
+}
+
 // fakeMutator records calls + returns scripted responses.
 type fakeMutator struct {
 	setColumnCalled struct {
@@ -130,6 +144,55 @@ func TestHandler_SetStatus_InvalidColumn(t *testing.T) {
 	}
 	if !res.IsError {
 		t.Fatal("expected IsError for invalid column")
+	}
+}
+
+func TestHandler_Mutation_BroadcastsCardUpdate(t *testing.T) {
+	m := &fakeMutator{}
+	b := &fakeBroadcaster{}
+	h := NewHandlersWithBroadcaster(m, b)
+
+	if _, err := h.SetSummary(context.Background(), "card-xyz", map[string]any{"summary": "refactoring"}); err != nil {
+		t.Fatalf("SetSummary: %v", err)
+	}
+
+	if len(b.calls) != 1 {
+		t.Fatalf("broadcaster calls = %d, want 1", len(b.calls))
+	}
+	if b.calls[0].cardID != "card-xyz" {
+		t.Fatalf("broadcast cardID = %q", b.calls[0].cardID)
+	}
+	payload := string(b.calls[0].msg)
+	if !strings.Contains(payload, `"type":"card_update"`) {
+		t.Errorf("payload missing type=card_update: %s", payload)
+	}
+	if !strings.Contains(payload, `"refactoring"`) {
+		t.Errorf("payload missing summary value: %s", payload)
+	}
+}
+
+func TestHandler_GetCard_DoesNotBroadcast(t *testing.T) {
+	m := &fakeMutator{}
+	b := &fakeBroadcaster{}
+	h := NewHandlersWithBroadcaster(m, b)
+	if _, err := h.GetCard(context.Background(), "card-1", nil); err != nil {
+		t.Fatalf("GetCard: %v", err)
+	}
+	if len(b.calls) != 0 {
+		t.Fatalf("GetCard must not broadcast, got %d calls", len(b.calls))
+	}
+}
+
+func TestHandler_MutationError_DoesNotBroadcast(t *testing.T) {
+	m := &fakeMutator{setSummaryErr: errors.New("boom")}
+	b := &fakeBroadcaster{}
+	h := NewHandlersWithBroadcaster(m, b)
+	res, _ := h.SetSummary(context.Background(), "card-1", map[string]any{"summary": "x"})
+	if !res.IsError {
+		t.Fatal("expected IsError")
+	}
+	if len(b.calls) != 0 {
+		t.Fatalf("errored mutation must not broadcast, got %d", len(b.calls))
 	}
 }
 

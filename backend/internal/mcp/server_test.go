@@ -16,7 +16,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *Sessions, *card.Service) {
 	store := card.NewStore()
 	svc := card.NewService(store)
 	sessions := NewSessions()
-	srv := NewServer(svc, sessions)
+	srv := NewServer(svc, sessions, nil)
 	ts := httptest.NewServer(srv)
 	t.Cleanup(ts.Close)
 	return ts, sessions, svc

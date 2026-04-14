@@ -25,8 +25,8 @@ func cardIDFromContext(ctx context.Context) string {
 // NewServer wires the existing Handlers to a streamable HTTP MCP server with
 // session-token middleware. Every request must carry ?token=<tok>; missing or
 // unknown tokens are rejected with 401 before reaching the MCP server.
-func NewServer(svc CardMutator, sessions *Sessions) http.Handler {
-	handlers := NewHandlers(svc)
+func NewServer(svc CardMutator, sessions *Sessions, broadcaster Broadcaster) http.Handler {
+	handlers := NewHandlersWithBroadcaster(svc, broadcaster)
 
 	mcpSrv := server.NewMCPServer("agent-desk", "0.1.0")
 	registerTools(mcpSrv, handlers)
