@@ -49,6 +49,7 @@ const newCard: Card = {
   blockedReason: "",
   progress: null,
   updatedAt: 0,
+  attachments: [],
 };
 
 const oneProjectBoard = {

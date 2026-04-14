@@ -16,6 +16,9 @@ interface CardModalProps {
   onApprove: () => void;
   onMerge: () => void;
   onClose: () => void;
+  onUpdate: (fields: Partial<Card>) => void;
+  onUpload: (file: File) => Promise<void>;
+  onDeleteAttachment: (name: string) => Promise<void>;
 }
 
 export function CardModal({
@@ -29,6 +32,9 @@ export function CardModal({
   onApprove,
   onMerge,
   onClose,
+  onUpdate,
+  onUpload,
+  onDeleteAttachment,
 }: CardModalProps) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -46,6 +52,9 @@ export function CardModal({
               projectTitle={projectTitle}
               onApprove={onApprove}
               onMerge={onMerge}
+              onUpdate={onUpdate}
+              onUpload={onUpload}
+              onDeleteAttachment={onDeleteAttachment}
             />
           </div>
           <div className="flex min-h-0 flex-col">

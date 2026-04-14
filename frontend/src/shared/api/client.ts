@@ -1,4 +1,4 @@
-import type { Board, Card, Message, Project } from "../types/domain";
+import type { Attachment, Board, Card, Message, Project } from "../types/domain";
 
 const BASE = "/api";
 
@@ -65,5 +65,29 @@ export const api = {
   },
   listMessages(id: string): Promise<Message[]> {
     return request<Message[]>(`/cards/${id}/messages`);
+  },
+  updateCard(id: string, fields: Partial<Card>): Promise<Card> {
+    return request<Card>(`/cards/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+  },
+  uploadAttachment(id: string, file: File): Promise<Attachment> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Attachment>(`/cards/${id}/attachments`, {
+      method: "POST",
+      body: form,
+    });
+  },
+  deleteAttachment(id: string, name: string): Promise<void> {
+    return request<void>(
+      `/cards/${id}/attachments/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    );
+  },
+  attachmentUrl(id: string, name: string): string {
+    return `/api/cards/${id}/attachments/${encodeURIComponent(name)}`;
   },
 };

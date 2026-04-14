@@ -80,7 +80,7 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(spyClaudeBin(t, argvFile))
 	projStore := project.NewStore(noopGit{})
-	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -138,7 +138,7 @@ func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinte
 	// Use "false" as the agent binary — it exits immediately so tests don't hang.
 	manager := agent.NewManager("false")
 	projStore := project.NewStore(noopGit{})
-	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -253,7 +253,7 @@ func TestHandler_StopMessageKillsRunningAgent(t *testing.T) {
 
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(hangClaudeBin(t))
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -319,7 +319,7 @@ func collectBridgeFrames(t *testing.T, events []agent.StreamEvent) (string, []ma
 	c := svc.CreateCard("proj-test", "bridge test")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -569,7 +569,7 @@ func TestEventBridge_ReadyForReviewStillMovesCard(t *testing.T) {
 	}
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -1043,7 +1043,7 @@ func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge persist")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -1086,7 +1086,7 @@ func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge empty")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0, nil)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -1167,7 +1167,7 @@ func TestHandler_MintsMcpSession_WhenConfigured(t *testing.T) {
 	projStore := project.NewStore(noopGit{})
 	sessions := mcp.NewSessions()
 	const mcpPort = 18765
-	h := wsinternal.NewHandler(hub, manager, svc, projStore, sessions, mcpPort)
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, sessions, mcpPort, nil)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

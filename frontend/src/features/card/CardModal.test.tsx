@@ -27,6 +27,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     blockedReason: "",
     progress: null,
     updatedAt: 0,
+    attachments: [],
     ...overrides,
   };
 }
@@ -52,6 +53,9 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof CardModal>> 
     onApprove: vi.fn(),
     onMerge: vi.fn(),
     onClose: vi.fn(),
+    onUpdate: () => {},
+    onUpload: () => Promise.resolve(),
+    onDeleteAttachment: () => Promise.resolve(),
     ...overrides,
   };
   return render(<CardModal {...props} />);
@@ -60,7 +64,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof CardModal>> 
 describe("CardModal", () => {
   it("renders card content and chat panel", () => {
     renderModal();
-    expect(screen.getByText("Implement auth flow")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Implement auth flow")).toBeInTheDocument();
     expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
   });
 
@@ -79,7 +83,7 @@ describe("CardModal", () => {
   it("does not call onClose when clicking modal content", async () => {
     const onClose = vi.fn();
     renderModal({ onClose });
-    await userEvent.click(screen.getByText("Implement auth flow"));
+    await userEvent.click(screen.getByDisplayValue("Implement auth flow"));
     expect(onClose).not.toHaveBeenCalled();
   });
 

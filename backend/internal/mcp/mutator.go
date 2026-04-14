@@ -6,7 +6,7 @@ import "github.com/jackuait/agent-desk/backend/internal/card"
 // Extracted as an interface so tool handler tests can mock without standing up a full store.
 type CardMutator interface {
 	GetCard(id string) (card.Card, error)
-	UpdateFields(id string, fields map[string]any) (card.Card, error)
+	UpdateFieldsFromAgent(id string, fields map[string]any) (card.Card, error)
 	SetColumn(id string, target card.Column) (card.Card, error)
 	SetSummary(id, summary string) (card.Card, error)
 	SetBlocked(id, reason string) (card.Card, error)

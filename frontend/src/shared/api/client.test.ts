@@ -23,6 +23,7 @@ const mockCard: Card = {
   blockedReason: "",
   progress: null,
   updatedAt: 0,
+  attachments: [],
 };
 
 const mockBoard: Board = {
@@ -44,6 +45,7 @@ function mockFetch(status: number, body: unknown) {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("api.createCard", () => {
@@ -212,4 +214,68 @@ describe("api.pickFolder", () => {
     const out = await api.pickFolder();
     expect(out).toEqual({ path: "/tmp/x", cancelled: false });
   });
+});
+
+describe("updateCard", () => {
+  it("PATCHes /api/cards/:id with fields", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "c1", title: "new" }), { status: 200 }),
+    );
+    await api.updateCard("c1", { title: "new" });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/cards/c1",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "new" }),
+      }),
+    );
+  });
+});
+
+describe("uploadAttachment", () => {
+  it("POSTs multipart to attachments endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ name: "x.txt", size: 1, mimeType: "text/plain", uploadedAt: 1 }),
+        { status: 201 },
+      ),
+    );
+    const file = new File(["x"], "x.txt", { type: "text/plain" });
+    const result = await api.uploadAttachment("c1", file);
+    expect(result.name).toBe("x.txt");
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe("/api/cards/c1/attachments");
+    expect((init as RequestInit).method).toBe("POST");
+    expect((init as RequestInit).body).toBeInstanceOf(FormData);
+  });
+});
+
+describe("deleteAttachment", () => {
+  it("DELETEs attachment by name", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 204 }),
+    );
+    await api.deleteAttachment("c1", "a.txt");
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/cards/c1/attachments/a.txt",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});
+
+describe("attachmentUrl", () => {
+  it("returns the GET URL for an attachment", () => {
+    expect(api.attachmentUrl("c1", "a.txt")).toBe("/api/cards/c1/attachments/a.txt");
+  });
+});
+
+it("has Attachment type exported via domain", async () => {
+  const sample: import("../types/domain").Attachment = {
+    name: "x.txt",
+    size: 1,
+    mimeType: "text/plain",
+    uploadedAt: 0,
+  };
+  expect(sample.name).toBe("x.txt");
 });

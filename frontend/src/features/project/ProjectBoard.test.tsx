@@ -44,6 +44,7 @@ const cards: Record<string, Card> = {
     blockedReason: "",
     progress: null,
     updatedAt: 0,
+    attachments: [],
   },
 };
 

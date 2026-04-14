@@ -25,8 +25,8 @@ func cardIDFromContext(ctx context.Context) string {
 // NewServer wires the existing Handlers to a streamable HTTP MCP server with
 // session-token middleware. Every request must carry ?token=<tok>; missing or
 // unknown tokens are rejected with 401 before reaching the MCP server.
-func NewServer(svc CardMutator, sessions *Sessions, broadcaster Broadcaster) http.Handler {
-	handlers := NewHandlersWithBroadcaster(svc, broadcaster)
+func NewServer(svc CardMutator, sessions *Sessions, broadcaster Broadcaster, att AttachmentReader) http.Handler {
+	handlers := NewHandlersWithBroadcasterAndAttachments(svc, broadcaster, att)
 
 	mcpSrv := server.NewMCPServer("agent-desk", "0.1.0")
 	registerTools(mcpSrv, handlers)
@@ -88,7 +88,7 @@ func toolFunc(fn func(ctx context.Context, cardID string, args map[string]any) (
 	}
 }
 
-// registerTools attaches all 16 agent-desk tools to the MCP server.
+// registerTools attaches all 18 agent-desk tools to the MCP server.
 func registerTools(s *server.MCPServer, h *Handlers) {
 	s.AddTool(
 		mcp.NewTool("mcp__agent_desk__get_card",
@@ -253,5 +253,23 @@ func registerTools(s *server.MCPServer, h *Handlers) {
 			),
 		),
 		toolFunc(h.SetRelevantFiles),
+	)
+
+	s.AddTool(
+		mcp.NewTool("mcp__agent_desk__list_attachments",
+			mcp.WithDescription("List all files attached to the scoped card."),
+		),
+		toolFunc(h.ListAttachments),
+	)
+
+	s.AddTool(
+		mcp.NewTool("mcp__agent_desk__read_attachment",
+			mcp.WithDescription("Read an attachment's bytes; text types return as string, binaries as base64 JSON."),
+			mcp.WithString("filename",
+				mcp.Required(),
+				mcp.MaxLength(255),
+			),
+		),
+		toolFunc(h.ReadAttachment),
 	)
 }

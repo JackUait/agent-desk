@@ -3,18 +3,46 @@ package card
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
+type source int
+
+const (
+	sourceUser  source = iota
+	sourceAgent source = iota
+)
+
+// AttachmentDiff captures what changed on the card's attachment list
+// since the last DrainDirty call. Lives in the card package to avoid
+// an import cycle with internal/attachment.
+type AttachmentDiff struct {
+	Added   []string
+	Removed []string
+}
+
+type dirtyEntry struct {
+	flags        map[string]struct{}
+	addedFiles   []string
+	removedFiles []string
+}
+
 type Service struct {
 	store *Store
+
+	dirtyMu sync.Mutex
+	dirty   map[string]*dirtyEntry // cardID -> entry
 }
 
 func NewService(store *Store) *Service {
-	return &Service{store: store}
+	return &Service{
+		store: store,
+		dirty: make(map[string]*dirtyEntry),
+	}
 }
 
 func (s *Service) CreateCard(projectID, title string) Card {
@@ -45,8 +73,20 @@ func (s *Service) DeleteCard(id string) error {
 }
 
 // UpdateFields applies a partial update to allowed string and slice fields.
-// Stamps UpdatedAt on any successful change.
+// Stamps UpdatedAt on any successful change. Marks title/description dirty
+// so user edits can be detected downstream.
 func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
+	return s.updateFieldsWithSource(id, fields, sourceUser)
+}
+
+// UpdateFieldsFromAgent is the same as UpdateFields but does not mark
+// the card dirty. Called by MCP handlers so agent self-edits don't feed
+// back into the dirty stream.
+func (s *Service) UpdateFieldsFromAgent(id string, fields map[string]any) (Card, error) {
+	return s.updateFieldsWithSource(id, fields, sourceAgent)
+}
+
+func (s *Service) updateFieldsWithSource(id string, fields map[string]any, src source) (Card, error) {
 	c, err := s.GetCard(id)
 	if err != nil {
 		return Card{}, err
@@ -56,10 +96,16 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 		case "title":
 			if str, ok := v.(string); ok {
 				c.Title = str
+				if src == sourceUser {
+					s.MarkDirty(id, "title")
+				}
 			}
 		case "description":
 			if str, ok := v.(string); ok {
 				c.Description = str
+				if src == sourceUser {
+					s.MarkDirty(id, "description")
+				}
 			}
 		case "complexity":
 			if str, ok := v.(string); ok {
@@ -81,6 +127,67 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 	}
 	s.touch(&c)
 	return c, nil
+}
+
+// MarkDirty records that the user mutated `flag` on `id`. Safe to call multiple
+// times; later calls are idempotent per flag.
+func (s *Service) MarkDirty(id, flag string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.ensureEntry(id)
+	e.flags[flag] = struct{}{}
+}
+
+func (s *Service) ensureEntry(id string) *dirtyEntry {
+	e, ok := s.dirty[id]
+	if !ok {
+		e = &dirtyEntry{flags: make(map[string]struct{})}
+		s.dirty[id] = e
+	}
+	return e
+}
+
+// RecordAttachmentAdded marks "attachments" dirty and appends name to addedFiles.
+func (s *Service) RecordAttachmentAdded(id, name string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.ensureEntry(id)
+	e.flags["attachments"] = struct{}{}
+	e.addedFiles = append(e.addedFiles, name)
+}
+
+// RecordAttachmentRemoved marks "attachments" dirty and appends name to removedFiles.
+func (s *Service) RecordAttachmentRemoved(id, name string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.ensureEntry(id)
+	e.flags["attachments"] = struct{}{}
+	e.removedFiles = append(e.removedFiles, name)
+}
+
+// DrainDirty returns the current flag set for id and clears it.
+// The second return value is an AttachmentDiff when attachment flags are present,
+// nil otherwise.
+func (s *Service) DrainDirty(id string) ([]string, any) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.dirty[id]
+	if e == nil || len(e.flags) == 0 {
+		return nil, nil
+	}
+	flags := make([]string, 0, len(e.flags))
+	for f := range e.flags {
+		flags = append(flags, f)
+	}
+	var diff any
+	if len(e.addedFiles) > 0 || len(e.removedFiles) > 0 {
+		diff = AttachmentDiff{
+			Added:   append([]string(nil), e.addedFiles...),
+			Removed: append([]string(nil), e.removedFiles...),
+		}
+	}
+	delete(s.dirty, id)
+	return flags, diff
 }
 
 // AddAcceptanceCriterion appends text to the acceptance-criteria list.
