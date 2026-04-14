@@ -26,6 +26,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     blockedReason: "",
     progress: null,
     updatedAt: 0,
+    attachments: [],
     ...overrides,
   };
 }

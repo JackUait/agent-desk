@@ -26,6 +26,13 @@ export interface Progress {
   currentStep: string;
 }
 
+export interface Attachment {
+  name: string;
+  size: number;
+  mimeType: string;
+  uploadedAt: number;
+}
+
 export interface Card {
   id: string;
   projectId: string;
@@ -47,6 +54,7 @@ export interface Card {
   updatedAt: number;
   model: string;
   effort: string;
+  attachments: Attachment[];
 }
 
 export interface Model {

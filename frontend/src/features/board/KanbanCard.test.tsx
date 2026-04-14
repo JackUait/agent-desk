@@ -25,6 +25,7 @@ const card: Card = {
   blockedReason: "",
   progress: null,
   updatedAt: 0,
+  attachments: [],
 };
 
 describe("KanbanCard", () => {
