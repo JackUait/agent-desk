@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { useModels } from "./useModels";
+import { useModels, EFFORTS, type Effort } from "./useModels";
 
 const MODELS = [
   { id: "claude-opus-4-6", label: "Opus 4.6" },
@@ -63,5 +63,20 @@ describe("useModels", () => {
     });
     expect(result.current.models).toEqual([]);
     consoleError.mockRestore();
+  });
+});
+
+describe("EFFORTS", () => {
+  it("exposes the four CLI effort levels in UX order", () => {
+    expect(EFFORTS).toEqual(["low", "medium", "high", "max"]);
+  });
+
+  it("Effort type matches the EFFORTS tuple", () => {
+    // Compile-time check: assigning each literal must satisfy Effort.
+    const a: Effort = "low";
+    const b: Effort = "medium";
+    const c: Effort = "high";
+    const d: Effort = "max";
+    expect([a, b, c, d]).toEqual(EFFORTS);
   });
 });

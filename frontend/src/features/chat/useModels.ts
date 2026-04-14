@@ -42,3 +42,6 @@ export function useModels(): UseModelsResult {
 
   return { models, loading };
 }
+
+export const EFFORTS = ["low", "medium", "high", "max"] as const;
+export type Effort = (typeof EFFORTS)[number];
