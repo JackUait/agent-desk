@@ -140,3 +140,36 @@ func TestServiceCreateSkill(t *testing.T) {
 		t.Error("expected duplicate rejection")
 	}
 }
+
+func TestServiceRename(t *testing.T) {
+	tmp := t.TempDir()
+	skillsRoot := filepath.Join(tmp, "skills")
+	commandsRoot := filepath.Join(tmp, "commands")
+	writeFile(t, filepath.Join(skillsRoot, "old", "SKILL.md"),
+		"---\nname: old\n---\nbody")
+	writeFile(t, filepath.Join(commandsRoot, "old.md"),
+		"---\nname: old\n---\nbody")
+
+	svc := NewService(Roots{Writable: []string{skillsRoot, commandsRoot}})
+
+	newSkill, err := svc.Rename(filepath.Join(skillsRoot, "old", "SKILL.md"), "fresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newSkill != filepath.Join(skillsRoot, "fresh", "SKILL.md") {
+		t.Errorf("unexpected new path: %s", newSkill)
+	}
+
+	newCmd, err := svc.Rename(filepath.Join(commandsRoot, "old.md"), "fresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newCmd != filepath.Join(commandsRoot, "fresh.md") {
+		t.Errorf("unexpected new path: %s", newCmd)
+	}
+
+	writeFile(t, filepath.Join(commandsRoot, "taken.md"), "x")
+	if _, err := svc.Rename(filepath.Join(commandsRoot, "fresh.md"), "taken"); err == nil {
+		t.Error("expected collision error")
+	}
+}

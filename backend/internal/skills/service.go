@@ -213,6 +213,37 @@ func (s *Service) writableRootFor(kind ItemKind) (string, error) {
 	return "", fmt.Errorf("no writable root for kind %s", kind)
 }
 
+func (s *Service) Rename(path, newName string) (string, error) {
+	resolved, err := ResolveWritable(path, s.roots)
+	if err != nil {
+		return "", err
+	}
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return "", errors.New("name required")
+	}
+	if filepath.Base(resolved) == "SKILL.md" {
+		parent := filepath.Dir(resolved)
+		newDir := filepath.Join(filepath.Dir(parent), newName)
+		if _, err := os.Stat(newDir); err == nil {
+			return "", ErrExists
+		}
+		if err := os.Rename(parent, newDir); err != nil {
+			return "", err
+		}
+		return filepath.Join(newDir, "SKILL.md"), nil
+	}
+	newName = strings.TrimSuffix(newName, ".md")
+	newPath := filepath.Join(filepath.Dir(resolved), newName+".md")
+	if _, err := os.Stat(newPath); err == nil {
+		return "", ErrExists
+	}
+	if err := os.Rename(resolved, newPath); err != nil {
+		return "", err
+	}
+	return newPath, nil
+}
+
 func containingEntry(target string, kind ItemKind) string {
 	if kind == KindSkill {
 		return filepath.Dir(target)
