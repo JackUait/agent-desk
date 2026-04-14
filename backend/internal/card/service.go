@@ -15,8 +15,8 @@ func NewService(store *Store) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) CreateCard(title string) Card {
-	return s.store.Create(title)
+func (s *Service) CreateCard(projectID, title string) Card {
+	return s.store.Create(projectID, title)
 }
 
 func (s *Service) GetCard(id string) (Card, error) {
@@ -27,8 +27,12 @@ func (s *Service) GetCard(id string) (Card, error) {
 	return c, nil
 }
 
-func (s *Service) ListCards() []Card {
-	return s.store.List()
+func (s *Service) ListCards(projectID string) []Card {
+	return s.store.List(projectID)
+}
+
+func (s *Service) DeleteByProject(projectID string) int {
+	return s.store.DeleteByProject(projectID)
 }
 
 func (s *Service) DeleteCard(id string) error {

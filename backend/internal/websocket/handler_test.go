@@ -67,7 +67,7 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 
 	store := card.NewStore()
 	svc = card.NewService(store)
-	c := svc.CreateCard("model test")
+	c := svc.CreateCard("proj-test", "model test")
 
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(spyClaudeBin(t, argvFile))
@@ -112,7 +112,7 @@ func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinte
 
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("test card")
+	c := svc.CreateCard("proj-test", "test card")
 
 	hub = wsinternal.NewHub()
 	// Use "false" as the agent binary — it exits immediately so tests don't hang.
@@ -219,7 +219,7 @@ func collectBridgeFrames(t *testing.T, events []agent.StreamEvent) (string, []ma
 
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("bridge test")
+	c := svc.CreateCard("proj-test", "bridge test")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
 	h := wsinternal.NewHandler(hub, manager, svc)
@@ -465,7 +465,7 @@ func TestEventBridge_TurnStart_ResetsDedupeSet(t *testing.T) {
 func TestEventBridge_ReadyForReviewStillMovesCard(t *testing.T) {
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("review test")
+	c := svc.CreateCard("proj-test", "review test")
 	// Move through statuses so MoveToReview is legal.
 	if _, err := svc.StartDevelopment(c.ID); err != nil {
 		t.Fatalf("StartDevelopment: %v", err)
@@ -744,7 +744,7 @@ func TestHandler_MessageFrame_PersistsUserMessage(t *testing.T) {
 func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("bridge persist")
+	c := svc.CreateCard("proj-test", "bridge persist")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
 	h := wsinternal.NewHandler(hub, manager, svc)
@@ -787,7 +787,7 @@ func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
 func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 	store := card.NewStore()
 	svc := card.NewService(store)
-	c := svc.CreateCard("bridge empty")
+	c := svc.CreateCard("proj-test", "bridge empty")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
 	h := wsinternal.NewHandler(hub, manager, svc)

@@ -11,6 +11,7 @@ const (
 
 type Card struct {
 	ID                 string   `json:"id"`
+	ProjectID          string   `json:"projectId"`
 	Title              string   `json:"title"`
 	Description        string   `json:"description"`
 	Column             Column   `json:"column"`

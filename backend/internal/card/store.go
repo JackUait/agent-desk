@@ -23,10 +23,11 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) Create(title string) Card {
+func (s *Store) Create(projectID, title string) Card {
 	id := newID()
 	c := Card{
 		ID:                 id,
+		ProjectID:          projectID,
 		Title:              title,
 		Column:             ColumnBacklog,
 		AcceptanceCriteria: []string{},
@@ -46,7 +47,24 @@ func (s *Store) Get(id string) (Card, bool) {
 	return c, ok
 }
 
-func (s *Store) List() []Card {
+func (s *Store) List(projectID string) []Card {
+	s.mu.RLock()
+	out := make([]Card, 0, len(s.cards))
+	for _, c := range s.cards {
+		if c.ProjectID == projectID {
+			out = append(out, c)
+		}
+	}
+	s.mu.RUnlock()
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt < out[j].CreatedAt
+	})
+	return out
+}
+
+// ListAll returns every card across every project. Used only by admin/debug
+// and the board aggregator. Prefer List(projectID) in normal code paths.
+func (s *Store) ListAll() []Card {
 	s.mu.RLock()
 	out := make([]Card, 0, len(s.cards))
 	for _, c := range s.cards {
@@ -57,6 +75,20 @@ func (s *Store) List() []Card {
 		return out[i].CreatedAt < out[j].CreatedAt
 	})
 	return out
+}
+
+func (s *Store) DeleteByProject(projectID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for id, c := range s.cards {
+		if c.ProjectID == projectID {
+			delete(s.cards, id)
+			delete(s.messages, id)
+			count++
+		}
+	}
+	return count
 }
 
 func (s *Store) Update(c Card) bool {

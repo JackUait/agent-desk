@@ -22,18 +22,28 @@ func NewHandler(svc *Service, agentMgr *agent.Manager, worktreeSvc *worktree.Ser
 
 func (h *Handler) CreateCard(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Title string `json:"title"`
+		ProjectID string `json:"projectId"`
+		Title     string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	c := h.svc.CreateCard(body.Title)
+	if body.ProjectID == "" {
+		httputil.Error(w, http.StatusBadRequest, "projectId is required")
+		return
+	}
+	c := h.svc.CreateCard(body.ProjectID, body.Title)
 	httputil.JSON(w, http.StatusCreated, c)
 }
 
 func (h *Handler) ListCards(w http.ResponseWriter, r *http.Request) {
-	cards := h.svc.ListCards()
+	projectID := r.URL.Query().Get("projectId")
+	if projectID == "" {
+		httputil.Error(w, http.StatusBadRequest, "projectId query param is required")
+		return
+	}
+	cards := h.svc.ListCards(projectID)
 	httputil.JSON(w, http.StatusOK, cards)
 }
 
