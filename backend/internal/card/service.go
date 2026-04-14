@@ -2,6 +2,7 @@ package card
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
@@ -268,6 +269,78 @@ func (s *Service) ClearBlocked(id string) (Card, error) {
 		return Card{}, err
 	}
 	c.BlockedReason = ""
+	s.touch(&c)
+	return c, nil
+}
+
+// SetProgress updates the card's progress snapshot. Enforces:
+//   - totalSteps >= 1
+//   - 0 <= step <= totalSteps
+func (s *Service) SetProgress(id string, step, totalSteps int, currentStep string) (Card, error) {
+	if totalSteps < 1 {
+		return Card{}, fmt.Errorf("totalSteps must be >= 1, got %d", totalSteps)
+	}
+	if step < 0 {
+		return Card{}, fmt.Errorf("step must be >= 0, got %d", step)
+	}
+	if step > totalSteps {
+		return Card{}, fmt.Errorf("step (%d) must be <= totalSteps (%d)", step, totalSteps)
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Progress = &Progress{Step: step, TotalSteps: totalSteps, CurrentStep: currentStep}
+	s.touch(&c)
+	return c, nil
+}
+
+// ClearProgress sets Progress to nil.
+func (s *Service) ClearProgress(id string) (Card, error) {
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Progress = nil
+	s.touch(&c)
+	return c, nil
+}
+
+// AddLabel trims + dedupes a label onto the card.
+func (s *Service) AddLabel(id, label string) (Card, error) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return Card{}, fmt.Errorf("label must not be empty")
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	for _, existing := range c.Labels {
+		if existing == label {
+			s.touch(&c)
+			return c, nil
+		}
+	}
+	c.Labels = append(c.Labels, label)
+	s.touch(&c)
+	return c, nil
+}
+
+// RemoveLabel removes a label if present. No-op if absent.
+func (s *Service) RemoveLabel(id, label string) (Card, error) {
+	label = strings.TrimSpace(label)
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	filtered := c.Labels[:0]
+	for _, existing := range c.Labels {
+		if existing != label {
+			filtered = append(filtered, existing)
+		}
+	}
+	c.Labels = filtered
 	s.touch(&c)
 	return c, nil
 }

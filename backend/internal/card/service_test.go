@@ -514,6 +514,109 @@ func TestClearBlocked(t *testing.T) {
 	}
 }
 
+func TestSetProgress_HappyPath(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.SetProgress(c.ID, 2, 5, "writing tests")
+	if err != nil {
+		t.Fatalf("SetProgress: %v", err)
+	}
+	if updated.Progress == nil {
+		t.Fatal("expected non-nil Progress")
+	}
+	if updated.Progress.Step != 2 || updated.Progress.TotalSteps != 5 {
+		t.Fatalf("got step=%d total=%d", updated.Progress.Step, updated.Progress.TotalSteps)
+	}
+	if updated.Progress.CurrentStep != "writing tests" {
+		t.Fatalf("currentStep = %q", updated.Progress.CurrentStep)
+	}
+}
+
+func TestSetProgress_StepBeyondTotal_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, 6, 5, "oops")
+	if err == nil {
+		t.Fatal("expected error when step > totalSteps")
+	}
+}
+
+func TestSetProgress_ZeroTotal_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, 0, 0, "x")
+	if err == nil {
+		t.Fatal("expected error when totalSteps < 1")
+	}
+}
+
+func TestSetProgress_NegativeStep_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetProgress(c.ID, -1, 3, "x")
+	if err == nil {
+		t.Fatal("expected error for negative step")
+	}
+}
+
+func TestClearProgress(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetProgress(c.ID, 1, 2, "x")
+	updated, err := svc.ClearProgress(c.ID)
+	if err != nil {
+		t.Fatalf("ClearProgress: %v", err)
+	}
+	if updated.Progress != nil {
+		t.Fatalf("expected nil Progress, got %+v", updated.Progress)
+	}
+}
+
+func TestAddLabel_TrimsAndDedupes(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddLabel(c.ID, "  bug  ")
+	updated, err := svc.AddLabel(c.ID, "bug")
+	if err != nil {
+		t.Fatalf("AddLabel: %v", err)
+	}
+	if len(updated.Labels) != 1 || updated.Labels[0] != "bug" {
+		t.Fatalf("labels = %v, want [bug]", updated.Labels)
+	}
+}
+
+func TestAddLabel_EmptyRejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.AddLabel(c.ID, "  ")
+	if err == nil {
+		t.Fatal("expected error for empty label")
+	}
+}
+
+func TestRemoveLabel(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.AddLabel(c.ID, "bug")
+	svc.AddLabel(c.ID, "urgent")
+	updated, err := svc.RemoveLabel(c.ID, "bug")
+	if err != nil {
+		t.Fatalf("RemoveLabel: %v", err)
+	}
+	if len(updated.Labels) != 1 || updated.Labels[0] != "urgent" {
+		t.Fatalf("labels = %v, want [urgent]", updated.Labels)
+	}
+}
+
+func TestRemoveLabel_Missing_NoError(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.RemoveLabel(c.ID, "ghost")
+	if err != nil {
+		t.Fatalf("RemoveLabel on missing label should be no-op, got: %v", err)
+	}
+}
+
 func TestService_AppendMessage_ThenListMessages(t *testing.T) {
 	svc := newTestService()
 	c := svc.CreateCard("proj-test", "x")
