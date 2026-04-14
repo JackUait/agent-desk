@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,4 +159,63 @@ func (s *Service) WriteContent(path, content string) (Content, error) {
 	}
 	fm, body := SplitFrontmatter(content)
 	return Content{Path: resolved, Body: body, Frontmatter: fm}, nil
+}
+
+var ErrExists = errors.New("already exists")
+
+func (s *Service) Create(kind ItemKind, name, body string) (Item, error) {
+	root, err := s.writableRootFor(kind)
+	if err != nil {
+		return Item{}, err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Item{}, errors.New("name required")
+	}
+	var target string
+	switch kind {
+	case KindSkill:
+		dir := filepath.Join(root, name)
+		if _, err := os.Stat(dir); err == nil {
+			return Item{}, ErrExists
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return Item{}, err
+		}
+		target = filepath.Join(dir, "SKILL.md")
+	case KindCommand:
+		target = filepath.Join(root, name+".md")
+		if _, err := os.Stat(target); err == nil {
+			return Item{}, ErrExists
+		}
+	default:
+		return Item{}, errors.New("invalid kind")
+	}
+	fm := map[string]string{"name": name, "description": ""}
+	content := AssembleFrontmatter(fm, body)
+	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
+		return Item{}, err
+	}
+	item, _, err := loadItem(containingEntry(target, kind), kind, SourceUser, "")
+	return item, err
+}
+
+func (s *Service) writableRootFor(kind ItemKind) (string, error) {
+	suffix := "skills"
+	if kind == KindCommand {
+		suffix = "commands"
+	}
+	for _, r := range s.roots.Writable {
+		if filepath.Base(r) == suffix {
+			return r, nil
+		}
+	}
+	return "", fmt.Errorf("no writable root for kind %s", kind)
+}
+
+func containingEntry(target string, kind ItemKind) string {
+	if kind == KindSkill {
+		return filepath.Dir(target)
+	}
+	return target
 }

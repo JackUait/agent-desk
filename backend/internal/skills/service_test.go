@@ -100,3 +100,43 @@ func TestServiceReadWriteContent(t *testing.T) {
 		t.Error("expected rejection for write outside writable roots")
 	}
 }
+
+func TestServiceCreateSkill(t *testing.T) {
+	tmp := t.TempDir()
+	skillsRoot := filepath.Join(tmp, "skills")
+	commandsRoot := filepath.Join(tmp, "commands")
+	if err := os.MkdirAll(skillsRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(commandsRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewService(Roots{Writable: []string{skillsRoot, commandsRoot}})
+
+	skill, err := svc.Create(KindSkill, "new-skill", "initial body")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skill.Kind != KindSkill || skill.Name != "new-skill" {
+		t.Errorf("unexpected: %+v", skill)
+	}
+	if _, err := os.Stat(filepath.Join(skillsRoot, "new-skill", "SKILL.md")); err != nil {
+		t.Errorf("file not created: %v", err)
+	}
+
+	cmd, err := svc.Create(KindCommand, "greet", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Kind != KindCommand || cmd.Name != "greet" {
+		t.Errorf("unexpected: %+v", cmd)
+	}
+	if _, err := os.Stat(filepath.Join(commandsRoot, "greet.md")); err != nil {
+		t.Errorf("file not created: %v", err)
+	}
+
+	if _, err := svc.Create(KindSkill, "new-skill", ""); err == nil {
+		t.Error("expected duplicate rejection")
+	}
+}
