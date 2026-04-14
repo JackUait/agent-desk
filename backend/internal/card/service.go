@@ -17,17 +17,31 @@ const (
 	sourceAgent source = iota
 )
 
+// AttachmentDiff captures what changed on the card's attachment list
+// since the last DrainDirty call. Lives in the card package to avoid
+// an import cycle with internal/attachment.
+type AttachmentDiff struct {
+	Added   []string
+	Removed []string
+}
+
+type dirtyEntry struct {
+	flags        map[string]struct{}
+	addedFiles   []string
+	removedFiles []string
+}
+
 type Service struct {
 	store *Store
 
 	dirtyMu sync.Mutex
-	dirty   map[string]map[string]struct{} // cardID -> flagSet
+	dirty   map[string]*dirtyEntry // cardID -> entry
 }
 
 func NewService(store *Store) *Service {
 	return &Service{
 		store: store,
-		dirty: make(map[string]map[string]struct{}),
+		dirty: make(map[string]*dirtyEntry),
 	}
 }
 
@@ -120,30 +134,60 @@ func (s *Service) updateFieldsWithSource(id string, fields map[string]any, src s
 func (s *Service) MarkDirty(id, flag string) {
 	s.dirtyMu.Lock()
 	defer s.dirtyMu.Unlock()
-	set, ok := s.dirty[id]
+	e := s.ensureEntry(id)
+	e.flags[flag] = struct{}{}
+}
+
+func (s *Service) ensureEntry(id string) *dirtyEntry {
+	e, ok := s.dirty[id]
 	if !ok {
-		set = make(map[string]struct{})
-		s.dirty[id] = set
+		e = &dirtyEntry{flags: make(map[string]struct{})}
+		s.dirty[id] = e
 	}
-	set[flag] = struct{}{}
+	return e
+}
+
+// RecordAttachmentAdded marks "attachments" dirty and appends name to addedFiles.
+func (s *Service) RecordAttachmentAdded(id, name string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.ensureEntry(id)
+	e.flags["attachments"] = struct{}{}
+	e.addedFiles = append(e.addedFiles, name)
+}
+
+// RecordAttachmentRemoved marks "attachments" dirty and appends name to removedFiles.
+func (s *Service) RecordAttachmentRemoved(id, name string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	e := s.ensureEntry(id)
+	e.flags["attachments"] = struct{}{}
+	e.removedFiles = append(e.removedFiles, name)
 }
 
 // DrainDirty returns the current flag set for id and clears it.
-// The second return value is reserved for an attachment diff and is empty
-// for now; it will be populated in a later task.
+// The second return value is an AttachmentDiff when attachment flags are present,
+// nil otherwise.
 func (s *Service) DrainDirty(id string) ([]string, any) {
 	s.dirtyMu.Lock()
 	defer s.dirtyMu.Unlock()
-	set := s.dirty[id]
-	if len(set) == 0 {
+	e := s.dirty[id]
+	if e == nil || len(e.flags) == 0 {
 		return nil, nil
 	}
-	out := make([]string, 0, len(set))
-	for f := range set {
-		out = append(out, f)
+	flags := make([]string, 0, len(e.flags))
+	for f := range e.flags {
+		flags = append(flags, f)
+	}
+	var diff any
+	if len(e.addedFiles) > 0 || len(e.removedFiles) > 0 {
+		diff = AttachmentDiff{
+			Added:   append([]string(nil), e.addedFiles...),
+			Removed: append([]string(nil), e.removedFiles...),
+		}
 	}
 	delete(s.dirty, id)
-	return out, nil
+	return flags, diff
 }
 
 // AddAcceptanceCriterion appends text to the acceptance-criteria list.

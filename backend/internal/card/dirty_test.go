@@ -72,3 +72,36 @@ func TestMarkDirtyDedupes(t *testing.T) {
 		t.Fatalf("unexpected flags %+v", flags)
 	}
 }
+
+func TestDrainDirtyReturnsAttachmentDiff(t *testing.T) {
+	svc, c := newServiceForDirtyTest(t)
+
+	svc.RecordAttachmentAdded(c.ID, "spec.pdf")
+	svc.RecordAttachmentAdded(c.ID, "wireframe.svg")
+	svc.RecordAttachmentRemoved(c.ID, "old.txt")
+
+	flags, diff := svc.DrainDirty(c.ID)
+	if len(flags) != 1 || flags[0] != "attachments" {
+		t.Fatalf("flags = %+v", flags)
+	}
+	if diff == nil {
+		t.Fatalf("expected diff, got nil")
+	}
+	d := diff.(AttachmentDiff)
+	if len(d.Added) != 2 || len(d.Removed) != 1 {
+		t.Fatalf("diff = %+v", d)
+	}
+	if d.Removed[0] != "old.txt" {
+		t.Fatalf("unexpected removed: %v", d.Removed)
+	}
+}
+
+func TestDrainClearsAttachmentDiff(t *testing.T) {
+	svc, c := newServiceForDirtyTest(t)
+	svc.RecordAttachmentAdded(c.ID, "x.txt")
+	svc.DrainDirty(c.ID)
+	flags, diff := svc.DrainDirty(c.ID)
+	if len(flags) != 0 || diff != nil {
+		t.Fatalf("expected cleared, got %+v %+v", flags, diff)
+	}
+}
