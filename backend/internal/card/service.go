@@ -2,6 +2,7 @@ package card
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
@@ -222,6 +223,52 @@ func (s *Service) SetSessionID(id, sessionID string) (Card, error) {
 	}
 	c.SessionID = sessionID
 	s.store.Update(c)
+	return c, nil
+}
+
+// touch stamps UpdatedAt to now (ms-ish via Unix seconds) and persists c.
+// Must be called from every mutation path.
+func (s *Service) touch(c *Card) {
+	c.UpdatedAt = time.Now().Unix()
+	s.store.Update(*c)
+}
+
+// SetSummary sets a short one-line status. Empty string clears. Max 280 chars.
+func (s *Service) SetSummary(id, summary string) (Card, error) {
+	if len(summary) > 280 {
+		return Card{}, fmt.Errorf("summary exceeds 280 chars (got %d)", len(summary))
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Summary = summary
+	s.touch(&c)
+	return c, nil
+}
+
+// SetBlocked marks the card as blocked with a non-empty reason.
+func (s *Service) SetBlocked(id, reason string) (Card, error) {
+	if reason == "" {
+		return Card{}, fmt.Errorf("blocked reason must not be empty")
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.BlockedReason = reason
+	s.touch(&c)
+	return c, nil
+}
+
+// ClearBlocked unmarks the card as blocked.
+func (s *Service) ClearBlocked(id string) (Card, error) {
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.BlockedReason = ""
+	s.touch(&c)
 	return c, nil
 }
 

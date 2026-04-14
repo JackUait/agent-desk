@@ -3,6 +3,7 @@ package card
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
@@ -433,6 +434,83 @@ func TestService_ListMessages_ReturnsEmptySliceNotNil_ForNewCard(t *testing.T) {
 	}
 	if len(msgs) != 0 {
 		t.Fatalf("expected 0 messages, got %d", len(msgs))
+	}
+}
+
+// --- Summary / Blocked / Progress / Labels ---
+
+func TestSetSummary_HappyPath_StampsUpdatedAt(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	before := c.UpdatedAt
+	time.Sleep(1100 * time.Millisecond)
+
+	updated, err := svc.SetSummary(c.ID, "refactoring auth")
+	if err != nil {
+		t.Fatalf("SetSummary: %v", err)
+	}
+	if updated.Summary != "refactoring auth" {
+		t.Fatalf("summary = %q, want 'refactoring auth'", updated.Summary)
+	}
+	if updated.UpdatedAt <= before {
+		t.Fatalf("UpdatedAt not advanced: before=%d after=%d", before, updated.UpdatedAt)
+	}
+}
+
+func TestSetSummary_TooLong_Rejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	long := strings.Repeat("a", 281)
+	_, err := svc.SetSummary(c.ID, long)
+	if err == nil {
+		t.Fatal("expected error for summary > 280 chars")
+	}
+}
+
+func TestSetSummary_Empty_Clears(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetSummary(c.ID, "temp")
+	updated, err := svc.SetSummary(c.ID, "")
+	if err != nil {
+		t.Fatalf("SetSummary empty: %v", err)
+	}
+	if updated.Summary != "" {
+		t.Fatalf("summary = %q, want empty", updated.Summary)
+	}
+}
+
+func TestSetBlocked_NonEmpty(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	updated, err := svc.SetBlocked(c.ID, "waiting on DB creds")
+	if err != nil {
+		t.Fatalf("SetBlocked: %v", err)
+	}
+	if updated.BlockedReason != "waiting on DB creds" {
+		t.Fatalf("reason = %q", updated.BlockedReason)
+	}
+}
+
+func TestSetBlocked_EmptyRejected(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	_, err := svc.SetBlocked(c.ID, "")
+	if err == nil {
+		t.Fatal("expected error for empty reason")
+	}
+}
+
+func TestClearBlocked(t *testing.T) {
+	svc := newTestService()
+	c := svc.CreateCard("p", "x")
+	svc.SetBlocked(c.ID, "stuck")
+	updated, err := svc.ClearBlocked(c.ID)
+	if err != nil {
+		t.Fatalf("ClearBlocked: %v", err)
+	}
+	if updated.BlockedReason != "" {
+		t.Fatalf("reason = %q, want empty", updated.BlockedReason)
 	}
 }
 
