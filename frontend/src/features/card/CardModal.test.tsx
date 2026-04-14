@@ -83,4 +83,13 @@ describe("CardModal", () => {
     const input = screen.getByLabelText("Message input");
     expect(input).toBeDisabled();
   });
+
+  it("renders the chooser with effort inside the modal", () => {
+    renderModal({
+      card: makeCard({ model: "claude-sonnet-4-6", effort: "high" }),
+    });
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Sonnet 4.6");
+    expect(trigger).toHaveTextContent("high");
+  });
 });

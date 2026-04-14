@@ -165,6 +165,40 @@ describe("useCardSocket", () => {
     expect(sent).not.toHaveProperty("model");
   });
 
+  it("sendMessage stamps model and effort onto the message frame", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("hi", "claude-sonnet-4-6", "high");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toEqual({
+      type: "message",
+      content: "hi",
+      model: "claude-sonnet-4-6",
+      effort: "high",
+    });
+  });
+
+  it("sendMessage omits effort when undefined", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("hi", "claude-sonnet-4-6");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toMatchObject({
+      type: "message",
+      content: "hi",
+      model: "claude-sonnet-4-6",
+    });
+    expect("effort" in sent).toBe(false);
+  });
+
   it("sendAction sends action type as JSON", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {

@@ -11,7 +11,7 @@ interface CardModalProps {
   userMessages: Message[];
   chatStream: ChatStreamState;
   models: Model[];
-  onSend: (content: string, model: string) => void;
+  onSend: (content: string, model: string, effort: string) => void;
   onApprove: () => void;
   onMerge: () => void;
   onClose: () => void;
@@ -53,6 +53,7 @@ export function CardModal({
               onSend={onSend}
               models={models}
               cardModel={card.model}
+              cardEffort={card.effort}
               readOnly={card.column === "done"}
             />
           </div>

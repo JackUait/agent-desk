@@ -16,7 +16,7 @@ import { api } from "./client";
 export interface UseCardSocketResult {
   userMessages: Message[];
   chatStream: ChatStreamState;
-  sendMessage: (content: string, model?: string) => void;
+  sendMessage: (content: string, model?: string, effort?: string) => void;
   sendAction: (type: "start" | "approve" | "merge") => void;
   cardUpdates: Partial<Card>;
   currentColumn: CardColumn | null;
@@ -115,23 +115,34 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
     };
   }, [cardId]);
 
-  const sendMessage = useCallback((content: string, model?: string) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const msg: WSClientMessage =
-      model && model.length > 0
-        ? { type: "message", content, model }
-        : { type: "message", content };
-    wsRef.current.send(JSON.stringify(msg));
-    setUserMessages((prev) => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        role: "user",
+  const sendMessage = useCallback(
+    (content: string, model?: string, effort?: string) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      const base: {
+        type: "message";
+        content: string;
+        model?: string;
+        effort?: string;
+      } = {
+        type: "message",
         content,
-        timestamp: Date.now(),
-      },
-    ]);
-  }, []);
+      };
+      if (model && model.length > 0) base.model = model;
+      if (effort && effort.length > 0) base.effort = effort;
+      const msg: WSClientMessage = base;
+      wsRef.current.send(JSON.stringify(msg));
+      setUserMessages((prev) => [
+        ...prev,
+        {
+          id: `local-${Date.now()}`,
+          role: "user",
+          content,
+          timestamp: Date.now(),
+        },
+      ]);
+    },
+    [],
+  );
 
   const sendAction = useCallback((type: "start" | "approve" | "merge") => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
