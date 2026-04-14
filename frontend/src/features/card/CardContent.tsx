@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 
 interface CardContentProps {
   card: Card;
-  onStart: () => void;
+  projectTitle?: string;
   onApprove: () => void;
   onMerge: () => void;
 }
@@ -12,14 +12,16 @@ function formatColumn(column: string): string {
   return column.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-export function CardContent({ card, onStart, onApprove, onMerge }: CardContentProps) {
+export function CardContent({ card, projectTitle, onApprove, onMerge }: CardContentProps) {
   return (
     <div className="flex flex-col gap-4 p-6 overflow-y-auto" data-testid="card-content">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium px-2 py-0.5 rounded bg-accent-blue-bg text-accent-blue">
           {formatColumn(card.column)}
         </span>
-        <span className="text-xs font-mono text-text-muted">{card.id.slice(0, 8)}</span>
+        {projectTitle && (
+          <span className="text-xs font-mono text-text-muted">{projectTitle}</span>
+        )}
       </div>
 
       <h3 className="text-xl font-semibold leading-snug text-text-primary m-0">{card.title}</h3>
@@ -86,14 +88,6 @@ export function CardContent({ card, onStart, onApprove, onMerge }: CardContentPr
           >
             {card.prUrl.replace(/^https?:\/\//, "")}
           </a>
-        </div>
-      )}
-
-      {card.column === "backlog" && (
-        <div className="flex gap-2 mt-2">
-          <Button variant="default" size="sm" type="button" onClick={onStart}>
-            Start Development
-          </Button>
         </div>
       )}
 

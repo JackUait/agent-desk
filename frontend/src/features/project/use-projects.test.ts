@@ -160,4 +160,78 @@ describe("useProjects", () => {
     );
     expect(backlog?.cardIds).toContain("c1");
   });
+
+  it("createCardInProject appends to the bottom by default", async () => {
+    mockedApi.getBoard.mockResolvedValue({
+      ...mockBoard,
+      columns: mockBoard.columns.map((c) =>
+        c.id === "col-backlog" ? { ...c, cardIds: ["existing"] } : c,
+      ),
+    });
+    mockedApi.createCard.mockResolvedValue({
+      id: "c-new",
+      projectId: "a",
+      title: "new",
+      description: "",
+      column: "backlog",
+      acceptanceCriteria: [],
+      complexity: "",
+      relevantFiles: [],
+      sessionId: "",
+      worktreePath: "",
+      branchName: "",
+      prUrl: "",
+      createdAt: 2,
+      model: "",
+    });
+
+    const { result } = renderHook(() => useProjects());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.createCardInProject("a", "new", "bottom");
+    });
+
+    const backlog = result.current.boardsByProject.a.columns.find(
+      (col) => col.id === "col-backlog",
+    );
+    expect(backlog?.cardIds).toEqual(["existing", "c-new"]);
+  });
+
+  it("createCardInProject prepends to the top when position is 'top'", async () => {
+    mockedApi.getBoard.mockResolvedValue({
+      ...mockBoard,
+      columns: mockBoard.columns.map((c) =>
+        c.id === "col-backlog" ? { ...c, cardIds: ["existing"] } : c,
+      ),
+    });
+    mockedApi.createCard.mockResolvedValue({
+      id: "c-new",
+      projectId: "a",
+      title: "new",
+      description: "",
+      column: "backlog",
+      acceptanceCriteria: [],
+      complexity: "",
+      relevantFiles: [],
+      sessionId: "",
+      worktreePath: "",
+      branchName: "",
+      prUrl: "",
+      createdAt: 2,
+      model: "",
+    });
+
+    const { result } = renderHook(() => useProjects());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.createCardInProject("a", "new", "top");
+    });
+
+    const backlog = result.current.boardsByProject.a.columns.find(
+      (col) => col.id === "col-backlog",
+    );
+    expect(backlog?.cardIds).toEqual(["c-new", "existing"]);
+  });
 });

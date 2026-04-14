@@ -29,7 +29,7 @@ describe("CardContent", () => {
 
   it("renders title and description", () => {
     render(
-      <CardContent card={makeCard()} onStart={noop} onApprove={noop} onMerge={noop} />,
+      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
     );
     expect(screen.getByText("Implement auth flow")).toBeInTheDocument();
     expect(screen.getByText("Add JWT-based authentication")).toBeInTheDocument();
@@ -39,7 +39,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "in_progress" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -47,25 +46,37 @@ describe("CardContent", () => {
     expect(screen.getByText("In progress")).toBeInTheDocument();
   });
 
-  it("shows card ID (first 8 chars)", () => {
+  it("shows project title when provided", () => {
     render(
-      <CardContent card={makeCard()} onStart={noop} onApprove={noop} onMerge={noop} />,
+      <CardContent
+        card={makeCard()}
+        projectTitle="agent-desk"
+        onApprove={noop}
+        onMerge={noop}
+      />,
     );
-    expect(screen.getByText("card-abc")).toBeInTheDocument();
+    expect(screen.getByText("agent-desk")).toBeInTheDocument();
+    expect(screen.queryByText("card-abc")).not.toBeInTheDocument();
   });
 
-  it("shows 'Start Development' button in backlog", () => {
+  it("omits project label when projectTitle is missing", () => {
     render(
-      <CardContent card={makeCard()} onStart={noop} onApprove={noop} onMerge={noop} />,
+      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
     );
-    expect(screen.getByRole("button", { name: "Start Development" })).toBeInTheDocument();
+    expect(screen.queryByText("card-abc")).not.toBeInTheDocument();
+  });
+
+  it("hides buttons in backlog", () => {
+    render(
+      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
+    );
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("hides buttons in in_progress", () => {
     render(
       <CardContent
         card={makeCard({ column: "in_progress" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -77,7 +88,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -89,7 +99,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -101,7 +110,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "done" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -109,21 +117,11 @@ describe("CardContent", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("calls onStart when clicking Start Development", async () => {
-    const onStart = vi.fn();
-    render(
-      <CardContent card={makeCard()} onStart={onStart} onApprove={noop} onMerge={noop} />,
-    );
-    await userEvent.click(screen.getByRole("button", { name: "Start Development" }));
-    expect(onStart).toHaveBeenCalledTimes(1);
-  });
-
   it("calls onApprove when clicking Approve", async () => {
     const onApprove = vi.fn();
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "" })}
-        onStart={noop}
         onApprove={onApprove}
         onMerge={noop}
       />,
@@ -137,7 +135,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={onMerge}
       />,
@@ -150,7 +147,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ acceptanceCriteria: ["Must handle errors", "Must log events"] })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -163,7 +159,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ complexity: "medium" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -175,7 +170,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ relevantFiles: ["src/main.ts"] })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,
@@ -187,7 +181,6 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onStart={noop}
         onApprove={noop}
         onMerge={noop}
       />,

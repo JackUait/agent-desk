@@ -6,7 +6,7 @@ interface Props {
   project: Project;
   board: Board;
   cards: Record<string, Card>;
-  onNewCard: (projectId: string) => void;
+  onNewCard: (projectId: string, position?: "top" | "bottom") => void;
   onRename: (title: string) => void;
   onCardClick: (id: string) => void;
 }
@@ -22,12 +22,12 @@ export function ProjectBoard({
   const cardCount = Object.keys(cards).length;
   return (
     <section id={project.id} className="flex flex-col gap-8 scroll-mt-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <ProjectHeader project={project} cardCount={cardCount} onRename={onRename} />
         <button
           type="button"
           onClick={() => onNewCard(project.id)}
-          className="mt-2 cursor-pointer rounded-md bg-accent-blue px-3.5 py-1.5 font-mono text-[12px] text-white transition hover:opacity-85"
+          className="cursor-pointer rounded-md bg-accent-blue px-3.5 py-1.5 font-mono text-[12px] text-white transition hover:opacity-85"
         >
           + new card
         </button>
@@ -42,6 +42,11 @@ export function ProjectBoard({
             exitingCards={new Set()}
             workingCards={new Set()}
             onCardClick={onCardClick}
+            onAddCard={
+              column.id === "col-backlog"
+                ? (position) => onNewCard(project.id, position)
+                : undefined
+            }
           />
         ))}
       </div>

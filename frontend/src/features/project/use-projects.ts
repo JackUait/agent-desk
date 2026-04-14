@@ -12,7 +12,7 @@ export interface UseProjectsResult {
   createProject: () => Promise<void>;
   renameProject: (id: string, title: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  createCardInProject: (projectId: string, title: string) => Promise<void>;
+  createCardInProject: (projectId: string, title: string, position?: "top" | "bottom") => Promise<void>;
   selectCard: (id: string | null) => void;
   updateCard: (card: Card) => void;
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
@@ -84,28 +84,37 @@ export function useProjects(): UseProjectsResult {
     });
   }, []);
 
-  const createCardInProject = useCallback(async (projectId: string, title: string) => {
-    const card = await api.createCard(projectId, title);
-    setCardsByProject((prev) => ({
-      ...prev,
-      [projectId]: { ...(prev[projectId] ?? {}), [card.id]: card },
-    }));
-    setBoardsByProject((prev) => {
-      const board = prev[projectId];
-      if (!board) return prev;
-      return {
+  const createCardInProject = useCallback(
+    async (projectId: string, title: string, position: "top" | "bottom" = "bottom") => {
+      const card = await api.createCard(projectId, title);
+      setCardsByProject((prev) => ({
         ...prev,
-        [projectId]: {
-          ...board,
-          columns: board.columns.map((col) =>
-            col.id === "col-backlog"
-              ? { ...col, cardIds: [...col.cardIds, card.id] }
-              : col,
-          ),
-        },
-      };
-    });
-  }, []);
+        [projectId]: { ...(prev[projectId] ?? {}), [card.id]: card },
+      }));
+      setBoardsByProject((prev) => {
+        const board = prev[projectId];
+        if (!board) return prev;
+        return {
+          ...prev,
+          [projectId]: {
+            ...board,
+            columns: board.columns.map((col) =>
+              col.id === "col-backlog"
+                ? {
+                    ...col,
+                    cardIds:
+                      position === "top"
+                        ? [card.id, ...col.cardIds]
+                        : [...col.cardIds, card.id],
+                  }
+                : col,
+            ),
+          },
+        };
+      });
+    },
+    [],
+  );
 
   const selectCard = useCallback((id: string | null) => setSelectedCardId(id), []);
 

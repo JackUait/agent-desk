@@ -7,11 +7,11 @@ import { Dialog } from "@/components/ui/dialog";
 
 interface CardModalProps {
   card: Card;
+  projectTitle?: string;
   userMessages: Message[];
   chatStream: ChatStreamState;
   models: Model[];
   onSend: (content: string, model: string) => void;
-  onStart: () => void;
   onApprove: () => void;
   onMerge: () => void;
   onClose: () => void;
@@ -19,11 +19,11 @@ interface CardModalProps {
 
 export function CardModal({
   card,
+  projectTitle,
   userMessages,
   chatStream,
   models,
   onSend,
-  onStart,
   onApprove,
   onMerge,
   onClose,
@@ -41,7 +41,7 @@ export function CardModal({
           <div className="overflow-y-auto border-r border-border-card p-8">
             <CardContent
               card={card}
-              onStart={onStart}
+              projectTitle={projectTitle}
               onApprove={onApprove}
               onMerge={onMerge}
             />

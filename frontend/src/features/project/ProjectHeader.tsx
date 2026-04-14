@@ -48,12 +48,12 @@ export function ProjectHeader({ project, cardCount, onRename }: Props) {
             if (e.key === "Enter") commit();
             if (e.key === "Escape") setEditing(false);
           }}
-          className="w-full border-none bg-transparent p-0 font-mono text-[56px] font-medium tracking-[-0.04em] text-text-primary outline-none"
+          className="w-full border-none bg-transparent p-0 font-mono text-[36px] font-medium tracking-[-0.04em] text-text-primary outline-none"
         />
       ) : (
         <h2
           onDoubleClick={() => setEditing(true)}
-          className="font-mono text-[56px] font-medium tracking-[-0.04em] text-text-primary"
+          className="font-mono text-[36px] font-medium tracking-[-0.04em] text-text-primary"
         >
           {project.title}
         </h2>

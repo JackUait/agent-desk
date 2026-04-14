@@ -11,12 +11,14 @@ import type { Card, Model } from "../../shared/types/domain";
 
 function CardModalWrapper({
   card,
+  projectTitle,
   models,
   onClose,
   updateCard,
   moveCardToColumn,
 }: {
   card: Card;
+  projectTitle?: string;
   models: Model[];
   onClose: () => void;
   updateCard: (card: Card) => void;
@@ -41,7 +43,6 @@ function CardModalWrapper({
     ...(worktreePath ? { worktreePath } : {}),
   };
 
-  function handleStart() { sendAction("start"); }
   function handleApprove() { sendAction("approve"); }
   function handleMerge() { sendAction("merge"); }
 
@@ -61,11 +62,11 @@ function CardModalWrapper({
   return (
     <CardModal
       card={mergedCard}
+      projectTitle={projectTitle}
       userMessages={userMessages}
       chatStream={chatStream}
       models={models}
       onSend={(content, model) => sendMessage(content, model)}
-      onStart={handleStart}
       onApprove={handleApprove}
       onMerge={handleMerge}
       onClose={onClose}
@@ -139,14 +140,14 @@ export function ProjectsPage() {
         {projects.length === 0 ? (
           <EmptyState onPickFolder={createProject} />
         ) : (
-          <div className="flex flex-col gap-[120px] py-12 pl-24 pr-12">
+          <div className="flex flex-col gap-16 py-12 pl-12 pr-12">
             {projects.map((p) => (
               <ProjectBoard
                 key={p.id}
                 project={p}
                 board={boardsByProject[p.id] ?? { id: "", title: "", columns: [] }}
                 cards={cardsByProject[p.id] ?? {}}
-                onNewCard={(pid) => createCardInProject(pid, "New Card")}
+                onNewCard={(pid, position) => createCardInProject(pid, "New Card", position)}
                 onRename={(title) => renameProject(p.id, title)}
                 onCardClick={(id) => selectCard(id)}
               />
@@ -157,6 +158,7 @@ export function ProjectsPage() {
       {selectedCard && (
         <CardModalWrapper
           card={selectedCard}
+          projectTitle={projects.find((p) => p.id === selectedCard.projectId)?.title}
           models={models}
           onClose={() => selectCard(null)}
           updateCard={updateCard}

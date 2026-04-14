@@ -76,4 +76,36 @@ describe("ProjectBoard", () => {
     fireEvent.click(screen.getByRole("button", { name: /new card/i }));
     expect(onNewCard).toHaveBeenCalledWith("p1");
   });
+
+  it("fires onNewCard with 'top' when the backlog top + button is clicked", () => {
+    const onNewCard = vi.fn();
+    render(
+      <ProjectBoard
+        project={project}
+        board={board}
+        cards={cards}
+        onNewCard={onNewCard}
+        onRename={vi.fn()}
+        onCardClick={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add card to top/i }));
+    expect(onNewCard).toHaveBeenCalledWith("p1", "top");
+  });
+
+  it("fires onNewCard with 'bottom' when the backlog 'Add a card' button is clicked", () => {
+    const onNewCard = vi.fn();
+    render(
+      <ProjectBoard
+        project={project}
+        board={board}
+        cards={cards}
+        onNewCard={onNewCard}
+        onRename={vi.fn()}
+        onCardClick={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add a card/i }));
+    expect(onNewCard).toHaveBeenCalledWith("p1", "bottom");
+  });
 });

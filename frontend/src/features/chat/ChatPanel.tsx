@@ -174,33 +174,36 @@ export function ChatPanel({
         <div ref={bottomRef} />
       </div>
       <form
-        className="border-t border-border-card bg-bg-card p-3 flex flex-col gap-2"
+        className="border-t border-border-card bg-bg-card p-3"
         onSubmit={handleSubmit}
       >
-        <Textarea
-          className="min-h-[44px] max-h-[180px] flex-1 resize-none"
-          placeholder="Type a message..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={readOnly}
-          aria-label="Message input"
-        />
-        <div className="flex items-end gap-2">
-          <ModelChooser
-            models={models}
-            value={selectedModel}
-            onChange={setSelectedModel}
-            disabled={readOnly || chatStream.turnInFlight}
+        <div className="flex flex-col gap-2 rounded-lg border border-border-card bg-bg-page focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+          <Textarea
+            className="min-h-[60px] max-h-[180px] resize-none rounded-none border-0 bg-transparent px-3 pt-2.5 pb-0 shadow-none focus-visible:border-0 focus-visible:ring-0"
+            placeholder="Type a message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={readOnly}
+            aria-label="Message input"
+            rows={3}
           />
-          <Button
-            type="submit"
-            size="sm"
-            data-testid="send-button"
-            disabled={readOnly || !input.trim()}
-          >
-            Send
-          </Button>
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <ModelChooser
+              models={models}
+              value={selectedModel}
+              onChange={setSelectedModel}
+              disabled={readOnly || chatStream.turnInFlight}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              data-testid="send-button"
+              disabled={readOnly || !input.trim()}
+            >
+              Send
+            </Button>
+          </div>
         </div>
       </form>
     </div>

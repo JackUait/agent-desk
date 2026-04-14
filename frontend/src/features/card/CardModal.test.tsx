@@ -43,7 +43,6 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof CardModal>> 
     chatStream: initialChatStreamState,
     models: MODELS,
     onSend: vi.fn(),
-    onStart: vi.fn(),
     onApprove: vi.fn(),
     onMerge: vi.fn(),
     onClose: vi.fn(),
