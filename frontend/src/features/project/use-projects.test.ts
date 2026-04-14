@@ -145,6 +145,11 @@ describe("useProjects", () => {
       prUrl: "",
       createdAt: 2,
       model: "",
+      labels: [],
+      summary: "",
+      blockedReason: "",
+      progress: null,
+      updatedAt: 0,
     });
 
     const { result } = renderHook(() => useProjects());
@@ -183,6 +188,11 @@ describe("useProjects", () => {
       prUrl: "",
       createdAt: 2,
       model: "",
+      labels: [],
+      summary: "",
+      blockedReason: "",
+      progress: null,
+      updatedAt: 0,
     });
 
     const { result } = renderHook(() => useProjects());
@@ -220,6 +230,11 @@ describe("useProjects", () => {
       prUrl: "",
       createdAt: 2,
       model: "",
+      labels: [],
+      summary: "",
+      blockedReason: "",
+      progress: null,
+      updatedAt: 0,
     });
 
     const { result } = renderHook(() => useProjects());

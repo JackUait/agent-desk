@@ -20,6 +20,11 @@ const cards: Record<string, Card> = {
     createdAt: 1000,
     model: "",
     effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
   },
   "card-2": {
     id: "card-2",
@@ -37,6 +42,11 @@ const cards: Record<string, Card> = {
     createdAt: 1001,
     model: "",
     effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
   },
 };
 

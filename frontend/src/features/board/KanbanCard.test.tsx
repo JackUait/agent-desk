@@ -20,6 +20,11 @@ const card: Card = {
   createdAt: 1000,
   model: "",
   effort: "",
+  labels: [],
+  summary: "",
+  blockedReason: "",
+  progress: null,
+  updatedAt: 0,
 };
 
 describe("KanbanCard", () => {

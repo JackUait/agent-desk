@@ -21,6 +21,11 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     createdAt: 1000,
     model: "",
     effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
     ...overrides,
   };
 }

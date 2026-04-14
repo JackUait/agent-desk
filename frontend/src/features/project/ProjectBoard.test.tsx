@@ -39,6 +39,11 @@ const cards: Record<string, Card> = {
     createdAt: 1,
     model: "",
     effort: "",
+    labels: [],
+    summary: "",
+    blockedReason: "",
+    progress: null,
+    updatedAt: 0,
   },
 };
 

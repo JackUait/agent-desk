@@ -20,6 +20,12 @@ export interface Project {
   createdAt: number;
 }
 
+export interface Progress {
+  step: number;
+  totalSteps: number;
+  currentStep: string;
+}
+
 export interface Card {
   id: string;
   projectId: string;
@@ -29,11 +35,16 @@ export interface Card {
   acceptanceCriteria: string[];
   complexity: string;
   relevantFiles: string[];
+  labels: string[];
+  summary: string;
+  blockedReason: string;
+  progress: Progress | null;
   sessionId: string;
   worktreePath: string;
   branchName: string;
   prUrl: string;
   createdAt: number;
+  updatedAt: number;
   model: string;
   effort: string;
 }
