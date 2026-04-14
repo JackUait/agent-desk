@@ -27,7 +27,7 @@ type Card struct {
 	Labels             []string  `json:"labels"`
 	Summary            string    `json:"summary"`
 	BlockedReason      string    `json:"blockedReason"`
-	Progress           *Progress `json:"progress,omitempty"`
+	Progress           *Progress `json:"progress"`
 	Model              string    `json:"model"`
 	Effort             string    `json:"effort"`
 	SessionID          string    `json:"sessionId"`
