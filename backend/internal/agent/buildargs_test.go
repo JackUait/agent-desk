@@ -6,7 +6,7 @@ import "testing"
 // live in the agent package (not agent_test).
 
 func TestBuildArgs_NoSessionNoModel(t *testing.T) {
-	args := buildArgs("", "", "", "hello")
+	args := buildArgs("", "", "", "hello", "")
 	if last := args[len(args)-1]; last != "hello" {
 		t.Fatalf("prompt should be last, got %v", args)
 	}
@@ -19,7 +19,7 @@ func TestBuildArgs_NoSessionNoModel(t *testing.T) {
 }
 
 func TestBuildArgs_SessionNoModel(t *testing.T) {
-	args := buildArgs("sess-1", "", "", "hi")
+	args := buildArgs("sess-1", "", "", "hi", "")
 	if !contains(args, "--resume") {
 		t.Fatalf("expected --resume: %v", args)
 	}
@@ -35,7 +35,7 @@ func TestBuildArgs_SessionNoModel(t *testing.T) {
 }
 
 func TestBuildArgs_NoSessionWithModel(t *testing.T) {
-	args := buildArgs("", "claude-opus-4-6", "", "hi")
+	args := buildArgs("", "claude-opus-4-6", "", "hi", "")
 	if contains(args, "--resume") {
 		t.Fatalf("unexpected --resume: %v", args)
 	}
@@ -56,7 +56,7 @@ func TestBuildArgs_NoSessionWithModel(t *testing.T) {
 }
 
 func TestBuildArgs_SessionAndModel(t *testing.T) {
-	args := buildArgs("sess-2", "claude-haiku-4-5", "", "yo")
+	args := buildArgs("sess-2", "claude-haiku-4-5", "", "yo", "")
 	if !contains(args, "--resume") {
 		t.Fatalf("expected --resume: %v", args)
 	}
@@ -69,7 +69,7 @@ func TestBuildArgs_SessionAndModel(t *testing.T) {
 }
 
 func TestBuildArgs_EffortAppendedAfterModel(t *testing.T) {
-	args := buildArgs("", "claude-sonnet-4-6", "high", "hello")
+	args := buildArgs("", "claude-sonnet-4-6", "high", "hello", "")
 
 	modelIdx := indexOf(args, "--model")
 	effortIdx := indexOf(args, "--effort")
@@ -96,17 +96,54 @@ func TestBuildArgs_EffortAppendedAfterModel(t *testing.T) {
 }
 
 func TestBuildArgs_EmptyEffortOmitted(t *testing.T) {
-	args := buildArgs("", "claude-opus-4-6", "", "hello")
+	args := buildArgs("", "claude-opus-4-6", "", "hello", "")
 	if contains(args, "--effort") {
 		t.Errorf("unexpected --effort in argv: %v", args)
 	}
 }
 
 func TestBuildArgs_EmptyModelAndEffort(t *testing.T) {
-	args := buildArgs("", "", "", "hello")
+	args := buildArgs("", "", "", "hello", "")
 	if contains(args, "--model") || contains(args, "--effort") {
 		t.Errorf("unexpected model/effort flags: %v", args)
 	}
+}
+
+func TestBuildArgs_IncludesMcpConfigAndAllowedTools(t *testing.T) {
+	args := buildArgs("", "", "", "msg", "/tmp/mcp-session-abc.json")
+	want := []string{"--mcp-config", "/tmp/mcp-session-abc.json"}
+	if !containsSubsequence(args, want) {
+		t.Fatalf("args missing %v: %v", want, args)
+	}
+	wantAllowed := []string{"--allowed-tools", "mcp__agent_desk__*"}
+	if !containsSubsequence(args, wantAllowed) {
+		t.Fatalf("args missing %v: %v", wantAllowed, args)
+	}
+}
+
+func TestBuildArgs_EmptyMcpConfig_OmitsFlag(t *testing.T) {
+	args := buildArgs("", "", "", "msg", "")
+	for _, a := range args {
+		if a == "--mcp-config" {
+			t.Fatal("did not expect --mcp-config when config path is empty")
+		}
+	}
+}
+
+func containsSubsequence(haystack, needle []string) bool {
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		match := true
+		for j, n := range needle {
+			if haystack[i+j] != n {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(args []string, want string) bool {
@@ -121,4 +158,3 @@ func indexOf(args []string, want string) int {
 	}
 	return -1
 }
-

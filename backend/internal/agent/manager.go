@@ -52,16 +52,20 @@ func NewManagerWithBuilder(claudeBin string, builder commandBuilder) *Manager {
 
 // buildArgs assembles the Claude CLI argv for a given session/model/effort/message.
 // Non-empty sessionID appends --resume <id>; non-empty model appends
-// --model <id>; non-empty effort appends --effort <level>. The prompt is
-// always the final positional argument. Order: --model before --effort
-// before prompt.
-func buildArgs(sessionID, model, effort, message string) []string {
+// --model <id>; non-empty effort appends --effort <level>; non-empty
+// mcpConfigPath appends --mcp-config <path> --allowed-tools mcp__agent_desk__*.
+// The prompt is always the final positional argument. Order: --model before
+// --effort before prompt.
+func buildArgs(sessionID, model, effort, message, mcpConfigPath string) []string {
 	args := []string{
 		"-p",
 		"--verbose",
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--append-system-prompt", agentSystemPrompt,
+	}
+	if mcpConfigPath != "" {
+		args = append(args, "--mcp-config", mcpConfigPath, "--allowed-tools", "mcp__agent_desk__*")
 	}
 	if sessionID != "" {
 		args = append(args, "--resume", sessionID)
@@ -78,12 +82,13 @@ func buildArgs(sessionID, model, effort, message string) []string {
 
 // SendRequest carries all inputs for a single agent turn.
 type SendRequest struct {
-	CardID    string
-	SessionID string
-	Model     string
-	Effort    string
-	Message   string
-	WorkDir   string // absolute path to the project repo
+	CardID        string
+	SessionID     string
+	Model         string
+	Effort        string
+	Message       string
+	WorkDir       string // absolute path to the project repo
+	McpConfigPath string // absolute path to a temp .mcp.json, or "" for none
 }
 
 // Send spawns a Claude CLI process in print mode for req.CardID in req.WorkDir
@@ -103,7 +108,7 @@ func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	m.running[req.CardID] = true
 	m.mu.Unlock()
 
-	args := buildArgs(req.SessionID, req.Model, req.Effort, req.Message)
+	args := buildArgs(req.SessionID, req.Model, req.Effort, req.Message, req.McpConfigPath)
 	cmd := m.builder(m.claudeBin, args, req.WorkDir)
 
 	stdout, err := cmd.StdoutPipe()
