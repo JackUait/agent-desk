@@ -1,0 +1,11 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { BlockedBanner } from "./BlockedBanner";
+
+describe("BlockedBanner", () => {
+  it("renders the reason with a blocked label", () => {
+    render(<BlockedBanner reason="waiting on DB schema" />);
+    expect(screen.getByText(/waiting on DB schema/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+});
