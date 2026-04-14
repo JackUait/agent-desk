@@ -45,9 +45,11 @@ export function EditableDescription({ value, onChange, placeholder }: EditableDe
   return (
     <textarea
       autoFocus
-      className="w-full min-h-[120px] bg-transparent text-sm leading-relaxed text-text-primary outline-none border border-border-input rounded p-2"
+      className="w-full min-h-[48px] bg-transparent text-sm leading-relaxed text-text-primary outline-none focus:outline-none resize-none border-0 p-2 -mx-2 block font-sans"
+      style={{ fieldSizing: "content" } as React.CSSProperties}
+      rows={1}
       value={local}
-      placeholder={placeholder}
+      placeholder={placeholder ?? "Add a description…"}
       onChange={(e) => {
         const next = e.target.value;
         setLocal(next);

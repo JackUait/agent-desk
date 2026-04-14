@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AlertTriangle, XIcon } from "lucide-react";
+import { AlertTriangle, Plus, XIcon } from "lucide-react";
 import type { Attachment } from "../../shared/types/domain";
 import { AttachmentTile } from "./AttachmentTile";
 import { AttachmentLightbox } from "./AttachmentLightbox";
@@ -35,38 +35,37 @@ export function AttachmentList({ cardId, attachments, onUpload, onDelete, hrefFo
     <div className="flex flex-col gap-2">
       <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">Attachments</h4>
 
-      {attachments.length > 0 && (
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
-        >
-          {attachments.map((a) => (
-            <AttachmentTile
-              key={a.name}
-              attachment={a}
-              href={hrefFor(cardId, a.name)}
-              onOpen={setOpenName}
-              onDelete={(name) => {
-                void onDelete(name);
-              }}
-            />
-          ))}
-        </div>
-      )}
-
       <div
-        className={`border border-dashed ${dragOver ? "border-accent-blue bg-bg-hover" : "border-border-input"} rounded-md p-3 text-center text-[11px] text-text-muted cursor-pointer`}
-        onClick={() => fileInput.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          const f = e.dataTransfer.files?.[0];
-          if (f) handleFile(f);
-        }}
+        className="grid gap-2"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
       >
-        Drop files or click to attach
+        {attachments.map((a) => (
+          <AttachmentTile
+            key={a.name}
+            attachment={a}
+            href={hrefFor(cardId, a.name)}
+            onOpen={setOpenName}
+            onDelete={(name) => {
+              void onDelete(name);
+            }}
+          />
+        ))}
+        <button
+          type="button"
+          aria-label="Add attachment"
+          className={`relative aspect-square rounded-md border border-dashed ${dragOver ? "border-accent-blue bg-bg-hover text-accent-blue" : "border-border-input text-text-muted"} flex items-center justify-center cursor-pointer transition-colors hover:border-accent-blue hover:text-accent-blue hover:bg-bg-hover`}
+          onClick={() => fileInput.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) handleFile(f);
+          }}
+        >
+          <Plus size={20} strokeWidth={1.5} />
+        </button>
       </div>
       <input
         ref={fileInput}

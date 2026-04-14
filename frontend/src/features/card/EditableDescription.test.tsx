@@ -22,6 +22,15 @@ describe("EditableDescription", () => {
     expect(onChange).toHaveBeenCalledWith("updated");
   });
 
+  it("editing textarea has no visible chrome and matches preview min-height", () => {
+    render(<EditableDescription value="hello" onChange={() => {}} />);
+    fireEvent.click(screen.getByText("hello"));
+    const area = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(area.className).not.toMatch(/border-border-input/);
+    expect(area.className).not.toMatch(/\brounded\b/);
+    expect(area.className).toMatch(/min-h-\[48px\]/);
+  });
+
   it("debounces 500ms during typing", () => {
     const onChange = vi.fn();
     render(<EditableDescription value="a" onChange={onChange} />);
