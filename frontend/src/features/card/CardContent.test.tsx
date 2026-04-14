@@ -195,3 +195,69 @@ describe("CardContent", () => {
     expect(link).toHaveAttribute("href", "https://github.com/pr/1");
   });
 });
+
+describe("CardContent new fields", () => {
+  const base = makeCard({
+    id: "c1",
+    title: "t",
+    description: "d",
+    column: "in_progress",
+  });
+
+  it("renders summary when present", () => {
+    render(<CardContent card={{ ...base, summary: "refactoring auth" }} onApprove={() => {}} onMerge={() => {}} />);
+    expect(screen.getByText("refactoring auth")).toBeInTheDocument();
+  });
+
+  it("hides summary when empty", () => {
+    render(<CardContent card={{ ...base, summary: "" }} onApprove={() => {}} onMerge={() => {}} />);
+    expect(screen.queryByText("refactoring auth")).not.toBeInTheDocument();
+  });
+
+  it("renders progress bar when progress set", () => {
+    render(
+      <CardContent
+        card={{ ...base, progress: { step: 2, totalSteps: 4, currentStep: "tests" } }}
+        onApprove={() => {}}
+        onMerge={() => {}}
+      />,
+    );
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByText("2 / 4")).toBeInTheDocument();
+  });
+
+  it("renders blocked status region when reason set", () => {
+    render(
+      <CardContent
+        card={{ ...base, blockedReason: "needs schema" }}
+        onApprove={() => {}}
+        onMerge={() => {}}
+      />,
+    );
+    expect(screen.getByRole("status", { name: /blocked.*needs schema/i })).toBeInTheDocument();
+  });
+
+  it("renders label chips", () => {
+    render(
+      <CardContent
+        card={{ ...base, labels: ["bug", "urgent"] }}
+        onApprove={() => {}}
+        onMerge={() => {}}
+      />,
+    );
+    expect(screen.getByText("bug")).toBeInTheDocument();
+    expect(screen.getByText("urgent")).toBeInTheDocument();
+  });
+
+  it("renders relative updatedAt when set", () => {
+    const now = Math.floor(Date.now() / 1000);
+    render(
+      <CardContent
+        card={{ ...base, updatedAt: now - 30 }}
+        onApprove={() => {}}
+        onMerge={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("updated-at")).toHaveTextContent(/updated\s+\d+s\s+ago/);
+  });
+});

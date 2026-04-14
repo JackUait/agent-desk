@@ -1,5 +1,8 @@
 import type { Card } from "../../shared/types/domain";
 import { Button } from "@/components/ui/button";
+import { ProgressBar } from "./ProgressBar";
+import { BlockedBanner } from "./BlockedBanner";
+import { LabelChips } from "./LabelChips";
 
 interface CardContentProps {
   card: Card;
@@ -10,6 +13,15 @@ interface CardContentProps {
 
 function formatColumn(column: string): string {
   return column.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function formatRelative(epochSec: number): string {
+  if (!epochSec) return "";
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - epochSec);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 export function CardContent({ card, projectTitle, onApprove, onMerge }: CardContentProps) {
@@ -24,7 +36,23 @@ export function CardContent({ card, projectTitle, onApprove, onMerge }: CardCont
         )}
       </div>
 
+      <LabelChips labels={card.labels} />
+
       <h3 className="text-xl font-semibold leading-snug text-text-primary m-0">{card.title}</h3>
+
+      {card.summary && (
+        <p className="text-sm italic text-text-secondary m-0">{card.summary}</p>
+      )}
+
+      {card.progress && (
+        <ProgressBar
+          step={card.progress.step}
+          totalSteps={card.progress.totalSteps}
+          currentStep={card.progress.currentStep}
+        />
+      )}
+
+      {card.blockedReason && <BlockedBanner reason={card.blockedReason} />}
 
       {card.description && (
         <p className="text-sm leading-relaxed text-text-secondary m-0">{card.description}</p>
@@ -105,6 +133,12 @@ export function CardContent({ card, projectTitle, onApprove, onMerge }: CardCont
             Merge
           </Button>
         </div>
+      )}
+
+      {card.updatedAt > 0 && (
+        <span data-testid="updated-at" className="text-[11px] text-text-muted">
+          updated {formatRelative(card.updatedAt)}
+        </span>
       )}
     </div>
   );
