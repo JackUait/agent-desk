@@ -2,9 +2,12 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 )
 
@@ -27,10 +30,17 @@ type Broadcaster interface {
 	Broadcast(cardID string, msg []byte)
 }
 
+// AttachmentReader is the subset of attachment.Service needed here.
+type AttachmentReader interface {
+	List(cardID string) ([]attachment.Attachment, error)
+	Read(cardID, name string) ([]byte, string, error)
+}
+
 // Handlers holds the CardMutator and exposes one method per MCP tool.
 type Handlers struct {
 	svc         CardMutator
 	broadcaster Broadcaster
+	attachments AttachmentReader
 }
 
 func NewHandlers(svc CardMutator) *Handlers {
@@ -39,6 +49,14 @@ func NewHandlers(svc CardMutator) *Handlers {
 
 func NewHandlersWithBroadcaster(svc CardMutator, b Broadcaster) *Handlers {
 	return &Handlers{svc: svc, broadcaster: b}
+}
+
+func NewHandlersWithAttachments(svc CardMutator, att AttachmentReader) *Handlers {
+	return &Handlers{svc: svc, attachments: att}
+}
+
+func NewHandlersWithBroadcasterAndAttachments(svc CardMutator, b Broadcaster, att AttachmentReader) *Handlers {
+	return &Handlers{svc: svc, broadcaster: b, attachments: att}
 }
 
 // broadcastCard pushes a card_update frame for the given card, mirroring the
@@ -317,4 +335,56 @@ func (h *Handlers) SetRelevantFiles(_ context.Context, cardID string, args map[s
 	}
 	h.broadcastCard(cardID, c)
 	return okResult(fmt.Sprintf("relevantFiles replaced (%d)", len(paths))), nil
+}
+
+func (h *Handlers) ListAttachments(_ context.Context, cardID string, _ map[string]any) (Result, error) {
+	if h.attachments == nil {
+		return Result{Message: "[]"}, nil
+	}
+	entries, err := h.attachments.List(cardID)
+	if err != nil {
+		return errResult("%v", err), nil
+	}
+	if entries == nil {
+		entries = []attachment.Attachment{}
+	}
+	b, err := json.Marshal(entries)
+	if err != nil {
+		return errResult("%v", err), nil
+	}
+	return Result{Message: string(b)}, nil
+}
+
+func (h *Handlers) ReadAttachment(_ context.Context, cardID string, args map[string]any) (Result, error) {
+	if h.attachments == nil {
+		return errResult("attachments unavailable"), nil
+	}
+	name, _ := args["filename"].(string)
+	data, mime, err := h.attachments.Read(cardID, name)
+	if err != nil {
+		return errResult("%v", err), nil
+	}
+	if isTextMIME(mime) {
+		return Result{Message: string(data)}, nil
+	}
+	payload := map[string]string{
+		"encoding": "base64",
+		"data":     base64.StdEncoding.EncodeToString(data),
+		"mimeType": mime,
+	}
+	bs, _ := json.Marshal(payload)
+	return Result{Message: string(bs)}, nil
+}
+
+func isTextMIME(mime string) bool {
+	switch {
+	case strings.HasPrefix(mime, "text/"):
+		return true
+	case mime == "application/json":
+		return true
+	case mime == "application/x-yaml", mime == "application/yaml":
+		return true
+	default:
+		return false
+	}
 }

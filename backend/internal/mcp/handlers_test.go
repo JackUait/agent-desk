@@ -1,11 +1,14 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 )
 
@@ -238,5 +241,90 @@ func TestHandler_SetStatus_ServiceError_SurfacesAsIsError(t *testing.T) {
 	}
 	if !strings.Contains(res.Message, "illegal") {
 		t.Fatalf("expected message to include service error, got %q", res.Message)
+	}
+}
+
+func TestListAttachmentsReturnsManifestJSON(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "t")
+
+	attRoot := t.TempDir()
+	attSvc := attachment.NewService(attachment.NewStore(attRoot), func() int64 { return 123 })
+	if _, err := attSvc.Upload(c.ID, "readme.txt", bytes.NewReader([]byte("hello"))); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	h := NewHandlersWithAttachments(svc, attSvc)
+	res, err := h.ListAttachments(context.Background(), c.ID, nil)
+	if err != nil || res.IsError {
+		t.Fatalf("ListAttachments: %+v err=%v", res, err)
+	}
+	if !strings.Contains(res.Message, "readme.txt") {
+		t.Fatalf("unexpected message: %q", res.Message)
+	}
+	var parsed []attachment.Attachment
+	if jsonErr := json.Unmarshal([]byte(res.Message), &parsed); jsonErr != nil {
+		t.Fatalf("message not JSON: %v", jsonErr)
+	}
+	if len(parsed) != 1 || parsed[0].Name != "readme.txt" {
+		t.Fatalf("unexpected manifest: %+v", parsed)
+	}
+}
+
+func TestReadAttachmentText(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "t")
+
+	attSvc := attachment.NewService(attachment.NewStore(t.TempDir()), func() int64 { return 1 })
+	if _, err := attSvc.Upload(c.ID, "notes.txt", bytes.NewReader([]byte("plain"))); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	h := NewHandlersWithAttachments(svc, attSvc)
+
+	res, err := h.ReadAttachment(context.Background(), c.ID, map[string]any{"filename": "notes.txt"})
+	if err != nil || res.IsError {
+		t.Fatalf("ReadAttachment: %+v err=%v", res, err)
+	}
+	if res.Message != "plain" {
+		t.Fatalf("expected plain text, got %q", res.Message)
+	}
+}
+
+func TestReadAttachmentBinaryIsBase64(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "t")
+
+	attSvc := attachment.NewService(attachment.NewStore(t.TempDir()), func() int64 { return 1 })
+	pngHeader := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}
+	if _, err := attSvc.Upload(c.ID, "tiny.png", bytes.NewReader(pngHeader)); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	h := NewHandlersWithAttachments(svc, attSvc)
+
+	res, err := h.ReadAttachment(context.Background(), c.ID, map[string]any{"filename": "tiny.png"})
+	if err != nil || res.IsError {
+		t.Fatalf("ReadAttachment: %+v err=%v", res, err)
+	}
+	var parsed struct {
+		Encoding string `json:"encoding"`
+		Data     string `json:"data"`
+	}
+	if jsonErr := json.Unmarshal([]byte(res.Message), &parsed); jsonErr != nil {
+		t.Fatalf("not JSON: %v", jsonErr)
+	}
+	if parsed.Encoding != "base64" || parsed.Data == "" {
+		t.Fatalf("unexpected: %+v", parsed)
+	}
+}
+
+func TestReadAttachmentMissing(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "t")
+	attSvc := attachment.NewService(attachment.NewStore(t.TempDir()), func() int64 { return 1 })
+	h := NewHandlersWithAttachments(svc, attSvc)
+
+	res, _ := h.ReadAttachment(context.Background(), c.ID, map[string]any{"filename": "nope.txt"})
+	if !res.IsError {
+		t.Fatalf("expected IsError for missing attachment")
 	}
 }
