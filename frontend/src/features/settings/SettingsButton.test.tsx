@@ -56,6 +56,35 @@ describe("SettingsButton", () => {
     ).toHaveAttribute("aria-checked", "true");
     expect(
       JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"),
-    ).toEqual({ autoOpenNewCards: true });
+    ).toMatchObject({ autoOpenNewCards: true });
+  });
+
+  it("renders a preview mode picker defaulting to modal", async () => {
+    const user = userEvent.setup();
+    render(<SettingsButton />);
+    await user.click(screen.getByRole("button", { name: /settings/i }));
+    const group = screen.getByRole("radiogroup", { name: /preview mode/i });
+    expect(group).toBeInTheDocument();
+    const modal = screen.getByRole("radio", { name: /^modal$/i });
+    const sidePeek = screen.getByRole("radio", { name: /side peek/i });
+    expect(modal).toHaveAttribute("aria-checked", "true");
+    expect(sidePeek).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("selecting side peek persists preview mode", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<SettingsButton />);
+    await user.click(screen.getByRole("button", { name: /settings/i }));
+    await user.click(screen.getByRole("radio", { name: /side peek/i }));
+    expect(
+      JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"),
+    ).toMatchObject({ previewMode: "side-peek" });
+    unmount();
+
+    render(<SettingsButton />);
+    await user.click(screen.getByRole("button", { name: /settings/i }));
+    expect(
+      screen.getByRole("radio", { name: /side peek/i }),
+    ).toHaveAttribute("aria-checked", "true");
   });
 });

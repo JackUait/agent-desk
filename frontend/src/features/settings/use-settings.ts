@@ -2,13 +2,23 @@ import { useCallback, useSyncExternalStore } from "react";
 
 export const SETTINGS_STORAGE_KEY = "agent-desk.settings";
 
+export type PreviewMode = "modal" | "side-peek";
+
+export const PREVIEW_MODES: readonly PreviewMode[] = ["modal", "side-peek"] as const;
+
 export interface Settings {
   autoOpenNewCards: boolean;
+  previewMode: PreviewMode;
 }
 
 const DEFAULTS: Settings = {
   autoOpenNewCards: false,
+  previewMode: "modal",
 };
+
+function coercePreviewMode(value: unknown): PreviewMode {
+  return value === "side-peek" ? "side-peek" : "modal";
+}
 
 function readFromStorage(): Settings {
   try {
@@ -17,6 +27,7 @@ function readFromStorage(): Settings {
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
       autoOpenNewCards: Boolean(parsed.autoOpenNewCards),
+      previewMode: coercePreviewMode(parsed.previewMode),
     };
   } catch {
     return DEFAULTS;
@@ -59,6 +70,7 @@ export function __resetSettingsForTests() {
 export interface UseSettingsResult {
   settings: Settings;
   setAutoOpenNewCards: (value: boolean) => void;
+  setPreviewMode: (value: PreviewMode) => void;
 }
 
 export function useSettings(): UseSettingsResult {
@@ -68,5 +80,9 @@ export function useSettings(): UseSettingsResult {
     setSettings({ ...currentSettings, autoOpenNewCards: value });
   }, []);
 
-  return { settings, setAutoOpenNewCards };
+  const setPreviewMode = useCallback((value: PreviewMode) => {
+    setSettings({ ...currentSettings, previewMode: value });
+  }, []);
+
+  return { settings, setAutoOpenNewCards, setPreviewMode };
 }

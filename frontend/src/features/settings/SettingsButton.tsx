@@ -1,10 +1,12 @@
+import type { ReactNode } from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
-import { SearchIcon, SettingsIcon } from "lucide-react";
+import { SearchIcon, SettingsIcon, SquareIcon, PanelRightIcon } from "lucide-react";
+import type { PreviewMode } from "./use-settings";
 import { useSettings } from "./use-settings";
 import { GlobalSkillsButton } from "../skills/GlobalSkillsButton";
 
 export function SettingsButton() {
-  const { settings, setAutoOpenNewCards } = useSettings();
+  const { settings, setAutoOpenNewCards, setPreviewMode } = useSettings();
 
   return (
     <>
@@ -44,6 +46,10 @@ export function SettingsButton() {
                   checked={settings.autoOpenNewCards}
                   onCheckedChange={setAutoOpenNewCards}
                 />
+                <PreviewModeRow
+                  value={settings.previewMode}
+                  onChange={setPreviewMode}
+                />
               </div>
             </PopoverPrimitive.Popup>
           </PopoverPrimitive.Positioner>
@@ -71,6 +77,54 @@ function SettingRow({
         <span className="text-[12px] leading-[1.45] text-text-secondary">{hint}</span>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} label={label} />
+    </div>
+  );
+}
+
+function PreviewModeRow({
+  value,
+  onChange,
+}: {
+  value: PreviewMode;
+  onChange: (value: PreviewMode) => void;
+}) {
+  const options: { value: PreviewMode; label: string; icon: ReactNode }[] = [
+    { value: "modal", label: "Modal", icon: <SquareIcon className="h-3.5 w-3.5" /> },
+    { value: "side-peek", label: "Side peek", icon: <PanelRightIcon className="h-3.5 w-3.5" /> },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[13px] font-medium text-text-primary">Preview mode</span>
+        <span className="text-[12px] leading-[1.45] text-text-secondary">
+          Choose how cards and skills open for preview.
+        </span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label="Preview mode"
+        className="mt-1 grid grid-cols-2 gap-1 rounded-md border border-border-card bg-bg-page p-1"
+      >
+        {options.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={opt.label}
+              data-selected={selected}
+              onClick={() => onChange(opt.value)}
+              className="inline-flex items-center justify-center gap-1.5 rounded-[6px] px-2 py-1.5 text-[12px] font-medium text-text-secondary transition data-[selected=true]:bg-bg-card data-[selected=true]:text-text-primary data-[selected=true]:shadow-[0_1px_2px_rgba(12,14,20,0.08)] hover:text-text-primary"
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
