@@ -107,6 +107,21 @@ describe("CardModal", () => {
     expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
   });
 
+  it("side-peek renders a top-left close button that calls onClose", async () => {
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    const closeBtn = screen.getByRole("button", { name: /close side peek/i });
+    await userEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("modal layout does not render the side-peek close button", () => {
+    renderModal();
+    expect(
+      screen.queryByRole("button", { name: /close side peek/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("side-peek renders no backdrop so the page behind is clickable", () => {
     renderModal({ previewMode: "side-peek" });
     expect(screen.queryByTestId("modal-overlay")).not.toBeInTheDocument();
