@@ -15,6 +15,7 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/mcp"
 	"github.com/jackuait/agent-desk/backend/internal/project"
+	"github.com/jackuait/agent-desk/backend/internal/skills"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	ws "github.com/jackuait/agent-desk/backend/internal/websocket"
 	"github.com/jackuait/agent-desk/backend/pkg/middleware"
@@ -68,6 +69,9 @@ func main() {
 
 	modelsHandler := agent.NewModelsHandler()
 	modelsHandler.RegisterRoutes(mux)
+
+	skillsHandler := skills.NewHandler(projectStore)
+	skillsHandler.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:         ":8080",

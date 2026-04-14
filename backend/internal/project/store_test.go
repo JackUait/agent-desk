@@ -107,6 +107,21 @@ func TestStore_Delete(t *testing.T) {
 	}
 }
 
+func TestStoreProjectPath(t *testing.T) {
+	s := project.NewStore(&project.StubGit{IsRepoVal: true})
+	p, err := s.Create(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, ok := s.ProjectPath(p.ID)
+	if !ok || path != p.Path {
+		t.Errorf("ProjectPath mismatch: %s %v", path, ok)
+	}
+	if _, ok := s.ProjectPath("bogus"); ok {
+		t.Error("expected miss")
+	}
+}
+
 func TestStore_Create_RunsGitInitWhenNotARepo(t *testing.T) {
 	git := &project.StubGit{IsRepoVal: false}
 	s := project.NewStore(git)

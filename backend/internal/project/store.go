@@ -55,6 +55,15 @@ func (s *Store) Get(id string) (Project, bool) {
 	return p, ok
 }
 
+// ProjectPath returns the stored filesystem path for a project id.
+func (s *Store) ProjectPath(id string) (string, bool) {
+	p, ok := s.Get(id)
+	if !ok {
+		return "", false
+	}
+	return p.Path, true
+}
+
 func (s *Store) List() []Project {
 	s.mu.RLock()
 	out := make([]Project, 0, len(s.projects))
