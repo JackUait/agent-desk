@@ -32,6 +32,7 @@ const BOARD = {
 const CARDS = [
   {
     id: "card-1",
+    projectId: "test",
     title: "Test card",
     description: "",
     column: "backlog" as const,
@@ -74,6 +75,7 @@ describe("useBoard", () => {
   it("creates a card and adds it to backlog", async () => {
     const newCard = {
       id: "card-new",
+      projectId: "test",
       title: "New card",
       description: "",
       column: "backlog" as const,

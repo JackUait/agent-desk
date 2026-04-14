@@ -7,6 +7,7 @@ import type { Card } from "../../shared/types/domain";
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
     id: "card-abc12345-xyz",
+    projectId: "test",
     title: "Implement auth flow",
     description: "Add JWT-based authentication",
     column: "backlog",

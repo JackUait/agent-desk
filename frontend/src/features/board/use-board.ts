@@ -40,8 +40,8 @@ export function useBoard(): UseBoardResult {
   const refresh = useCallback(async () => {
     try {
       const [boardData, cardList] = await Promise.all([
-        api.getBoard(),
-        api.listCards(),
+        api.getBoard(""),
+        api.listCards(""),
       ]);
       setBoard(boardData);
       const cardMap: Record<string, Card> = {};
@@ -61,7 +61,7 @@ export function useBoard(): UseBoardResult {
   }, [refresh]);
 
   const createCard = useCallback(async (title: string) => {
-    const card = await api.createCard(title);
+    const card = await api.createCard("", title);
     setCards((prev) => ({ ...prev, [card.id]: card }));
     setBoard((prev) => ({
       ...prev,

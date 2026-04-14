@@ -6,6 +6,7 @@ import type { Card, Column as ColumnType } from "../../shared/types/domain";
 const cards: Record<string, Card> = {
   "card-1": {
     id: "card-1",
+    projectId: "test",
     title: "Set up CI pipeline",
     description: "Configure GitHub Actions",
     column: "backlog",
@@ -21,6 +22,7 @@ const cards: Record<string, Card> = {
   },
   "card-2": {
     id: "card-2",
+    projectId: "test",
     title: "Design auth flow",
     description: "Token-based auth",
     column: "backlog",

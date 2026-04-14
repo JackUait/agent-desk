@@ -6,6 +6,7 @@ import type { Card } from "../../shared/types/domain";
 
 const card: Card = {
   id: "card-1",
+  projectId: "test",
   title: "Set up CI pipeline",
   description: "Configure GitHub Actions",
   column: "backlog",

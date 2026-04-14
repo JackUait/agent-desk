@@ -12,8 +12,17 @@ export interface Column {
 
 export type CardColumn = "backlog" | "in_progress" | "review" | "done";
 
+export interface Project {
+  id: string;
+  title: string;
+  path: string;
+  colorIdx: number;
+  createdAt: number;
+}
+
 export interface Card {
   id: string;
+  projectId: string;
   title: string;
   description: string;
   column: CardColumn;
