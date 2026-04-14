@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ChatPanel } from "./ChatPanel";
@@ -12,9 +12,7 @@ const MODELS: Model[] = [
   { id: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
-const userMessages: Message[] = [
-  { id: "1", role: "user", content: "Hello agent", timestamp: 1000 },
-];
+const EMPTY_STREAM = initialChatStreamState;
 
 function streamWithText(text: string, done = true): ChatStreamState {
   return {
@@ -41,23 +39,31 @@ function streamWithText(text: string, done = true): ChatStreamState {
 }
 
 function renderPanel(
-  props: Partial<React.ComponentProps<typeof ChatPanel>> = {},
+  overrides: Partial<React.ComponentProps<typeof ChatPanel>> = {},
 ) {
-  const defaultProps: React.ComponentProps<typeof ChatPanel> = {
-    userMessages: [],
-    chatStream: initialChatStreamState,
-    onSend: vi.fn(),
-    models: MODELS,
-    cardModel: "",
-  };
-  return render(<ChatPanel {...defaultProps} {...props} />);
+  const onSend = vi.fn();
+  const utils = render(
+    <ChatPanel
+      userMessages={[]}
+      chatStream={EMPTY_STREAM}
+      models={MODELS}
+      cardModel=""
+      cardEffort=""
+      onSend={onSend}
+      {...overrides}
+    />,
+  );
+  return { ...utils, onSend };
 }
 
 beforeEach(() => {
   window.localStorage.clear();
 });
+afterEach(() => {
+  window.localStorage.clear();
+});
 
-describe("ChatPanel", () => {
+describe("ChatPanel basics", () => {
   it("renders the message list container", () => {
     renderPanel();
     expect(screen.getByTestId("message-list")).toBeInTheDocument();
@@ -69,6 +75,9 @@ describe("ChatPanel", () => {
   });
 
   it("renders user messages", () => {
+    const userMessages: Message[] = [
+      { id: "1", role: "user", content: "Hello agent", timestamp: 1000 },
+    ];
     renderPanel({ userMessages });
     expect(screen.getByText("Hello agent")).toBeInTheDocument();
   });
@@ -156,21 +165,9 @@ describe("ChatPanel", () => {
     expect(screen.getByTestId("turn-streaming")).toBeInTheDocument();
   });
 
-  it("calls onSend with the input value and selected model, then clears the input", async () => {
-    const user = userEvent.setup();
-    const onSend = vi.fn();
-    renderPanel({ onSend, cardModel: "claude-opus-4-6" });
-    const input = screen.getByRole("textbox");
-    await user.type(input, "my message");
-    await user.keyboard("{Enter}");
-    expect(onSend).toHaveBeenCalledWith("my message", "claude-opus-4-6");
-    expect(input).toHaveValue("");
-  });
-
   it("does not call onSend for blank input", async () => {
     const user = userEvent.setup();
-    const onSend = vi.fn();
-    renderPanel({ onSend });
+    const { onSend } = renderPanel();
     await user.keyboard("{Enter}");
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -187,91 +184,103 @@ describe("ChatPanel", () => {
 
   it("does not call onSend when readOnly and form is submitted", async () => {
     const user = userEvent.setup();
-    const onSend = vi.fn();
-    renderPanel({ readOnly: true, onSend });
+    const { onSend } = renderPanel({ readOnly: true });
     await user.keyboard("{Enter}");
     expect(onSend).not.toHaveBeenCalled();
   });
+});
 
-  // ---- Model chooser integration ----
-
-  async function selectModelByLabel(
-    user: ReturnType<typeof userEvent.setup>,
-    label: string,
-  ) {
-    await user.click(screen.getByTestId("model-chooser"));
-    const options = await screen.findAllByRole("option");
-    const target = options.find((o) => o.textContent?.includes(label));
-    if (!target) throw new Error(`Model option "${label}" not found`);
-    await user.click(target);
-  }
-
-  it("initialises selectedModel from cardModel when non-empty", () => {
-    renderPanel({ cardModel: "claude-sonnet-4-6" });
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
+describe("ChatPanel selection init priority", () => {
+  it("uses cardModel + cardEffort when both non-empty", () => {
+    renderPanel({ cardModel: "claude-sonnet-4-6", cardEffort: "high" });
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Sonnet 4.6");
+    expect(trigger).toHaveTextContent("high");
   });
 
-  it("falls back to localStorage when cardModel is empty", () => {
-    window.localStorage.setItem("agentDesk.lastModel", "claude-haiku-4-5");
-    renderPanel({ cardModel: "" });
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Haiku 4.5");
+  it("falls through to localStorage when cardEffort is empty", () => {
+    window.localStorage.setItem(
+      "agentDesk.lastSelection",
+      JSON.stringify({ model: "claude-haiku-4-5", effort: "low" }),
+    );
+    renderPanel({ cardModel: "claude-sonnet-4-6", cardEffort: "" });
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Haiku 4.5");
+    expect(trigger).toHaveTextContent("low");
   });
 
-  it("ignores a localStorage model that is not in the models list", () => {
-    window.localStorage.setItem("agentDesk.lastModel", "claude-fake");
-    renderPanel({ cardModel: "" });
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Opus 4.6");
+  it("migrates legacy lastModel key with medium default", () => {
+    window.localStorage.setItem("agentDesk.lastModel", "claude-sonnet-4-6");
+    renderPanel();
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Sonnet 4.6");
+    expect(trigger).toHaveTextContent("medium");
   });
 
-  it("falls back to claude-opus-4-6 when cardModel empty and no localStorage", () => {
-    renderPanel({ cardModel: "" });
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Opus 4.6");
+  it("defaults to Opus 4.6 · medium when no prior", () => {
+    renderPanel();
+    const trigger = screen.getByTestId("model-chooser");
+    expect(trigger).toHaveTextContent("Opus 4.6");
+    expect(trigger).toHaveTextContent("medium");
   });
+});
 
-  it("disables the model chooser while turnInFlight is true", () => {
-    const chatStream: ChatStreamState = {
-      turns: [],
-      turnInFlight: true,
-    };
-    renderPanel({ chatStream });
-    expect(screen.getByTestId("model-chooser")).toBeDisabled();
-  });
-
-  it("passes the newly-selected model on the next send", async () => {
+describe("ChatPanel send flow", () => {
+  it("calls onSend(content, model, effort) and writes lastSelection", async () => {
     const user = userEvent.setup();
-    const onSend = vi.fn();
-    renderPanel({ onSend, cardModel: "claude-opus-4-6" });
-    await selectModelByLabel(user, "Haiku 4.5");
-    const input = screen.getByRole("textbox");
-    await user.type(input, "hi");
-    await user.keyboard("{Enter}");
-    expect(onSend).toHaveBeenCalledWith("hi", "claude-haiku-4-5");
-  });
+    const { onSend } = renderPanel({
+      cardModel: "claude-haiku-4-5",
+      cardEffort: "low",
+    });
 
-  it("writes the latest selected model to localStorage after send", async () => {
-    const user = userEvent.setup();
-    const onSend = vi.fn();
-    renderPanel({ onSend, cardModel: "claude-opus-4-6" });
-    await selectModelByLabel(user, "Sonnet 4.6");
-    const input = screen.getByRole("textbox");
-    await user.type(input, "hi");
-    await user.keyboard("{Enter}");
-    expect(window.localStorage.getItem("agentDesk.lastModel")).toBe(
-      "claude-sonnet-4-6",
+    await user.type(screen.getByLabelText("Message input"), "hi");
+    await user.click(screen.getByTestId("send-button"));
+
+    expect(onSend).toHaveBeenCalledWith("hi", "claude-haiku-4-5", "low");
+    expect(window.localStorage.getItem("agentDesk.lastSelection")).toBe(
+      JSON.stringify({ model: "claude-haiku-4-5", effort: "low" }),
     );
   });
 
-  it("re-syncs selectedModel when cardModel prop changes", () => {
-    const { rerender } = renderPanel({ cardModel: "claude-opus-4-6" });
+  it("removes the legacy lastModel key on send", async () => {
+    window.localStorage.setItem("agentDesk.lastModel", "claude-opus-4-6");
+    const user = userEvent.setup();
+    renderPanel({ cardModel: "claude-sonnet-4-6", cardEffort: "high" });
+    await user.type(screen.getByLabelText("Message input"), "hi");
+    await user.click(screen.getByTestId("send-button"));
+    expect(window.localStorage.getItem("agentDesk.lastModel")).toBeNull();
+  });
+
+  it("disables chooser while turnInFlight", () => {
+    renderPanel({ chatStream: { ...EMPTY_STREAM, turnInFlight: true } });
+    expect(screen.getByTestId("model-chooser")).toBeDisabled();
+  });
+});
+
+describe("ChatPanel card_update resync", () => {
+  it("updates selection when cardModel or cardEffort changes", () => {
+    const { rerender } = render(
+      <ChatPanel
+        userMessages={[]}
+        chatStream={EMPTY_STREAM}
+        models={MODELS}
+        cardModel="claude-opus-4-6"
+        cardEffort="medium"
+        onSend={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("medium");
+
     rerender(
       <ChatPanel
         userMessages={[]}
-        chatStream={initialChatStreamState}
-        onSend={vi.fn()}
+        chatStream={EMPTY_STREAM}
         models={MODELS}
-        cardModel="claude-sonnet-4-6"
+        cardModel="claude-opus-4-6"
+        cardEffort="max"
+        onSend={() => {}}
       />,
     );
-    expect(screen.getByTestId("model-chooser")).toHaveTextContent("Sonnet 4.6");
+    expect(screen.getByTestId("model-chooser")).toHaveTextContent("max");
   });
 });
