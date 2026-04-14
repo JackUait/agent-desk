@@ -29,6 +29,7 @@ function CardModalWrapper({
   uploadAttachment: (cardId: string, projectId: string, file: File) => Promise<void>;
   deleteAttachment: (cardId: string, projectId: string, name: string) => Promise<void>;
 }) {
+  const { settings } = useSettings();
   const {
     userMessages,
     chatStream,
@@ -89,6 +90,7 @@ function CardModalWrapper({
       onUpdate={(fields) => updateCard({ ...card, ...fields })}
       onUpload={(file) => uploadAttachment(card.id, card.projectId, file)}
       onDeleteAttachment={(name) => deleteAttachment(card.id, card.projectId, name)}
+      previewMode={settings.previewMode}
     />
   );
 }
@@ -179,7 +181,7 @@ export function ProjectsPage() {
               cards={cardsByProject[p.id] ?? {}}
               onNewCard={async (pid, position) => {
                 const card = await createCardInProject(pid, "New Card", position);
-                if (settings.autoOpenNewCards) selectCard(card.id);
+                if (settings.autoOpenNewCards || selectedCardId) selectCard(card.id);
               }}
               onRename={(title) => renameProject(p.id, title)}
               onCardClick={(id) => selectCard(id)}

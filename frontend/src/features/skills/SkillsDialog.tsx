@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { SkillKind, SkillScope } from "./types";
 import { useSkills } from "./use-skills";
@@ -6,6 +6,7 @@ import { SkillsList } from "./SkillsList";
 import { SkillEditor } from "./SkillEditor";
 import { NewSkillDialog } from "./NewSkillDialog";
 import { DeleteSkillConfirm } from "./DeleteSkillConfirm";
+import { useSettings } from "../settings";
 
 interface Props {
   open: boolean;
@@ -15,17 +16,35 @@ interface Props {
 
 export function SkillsDialog({ open, scope, onClose }: Props) {
   const skills = useSkills(scope);
+  const { settings } = useSettings();
   const [kind, setKind] = useState<SkillKind>("skill");
   const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
+  const isSidePeek = settings.previewMode === "side-peek";
+  const attemptCloseRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    if (!open || !isSidePeek) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") attemptCloseRef.current();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, isSidePeek]);
+
   if (!open) return null;
+
+  const panelClass = isSidePeek
+    ? "fixed right-0 top-0 z-50 flex h-dvh w-[min(760px,96vw)] flex-col border-l border-border-card bg-bg-card shadow-2xl animate-in slide-in-from-right"
+    : "flex h-[80vh] w-[min(1100px,95vw)] flex-col rounded-lg border border-border-card bg-bg-card shadow-xl";
 
   const attemptClose = () => {
     if (skills.isDirty && !window.confirm("You have unsaved changes. Close anyway?")) return;
     onClose();
   };
+  attemptCloseRef.current = attemptClose;
 
   const attemptKindSwitch = (next: SkillKind) => {
     if (skills.isDirty && !window.confirm("Discard unsaved changes?")) return;
@@ -34,9 +53,12 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
 
   const scopeLabel = scope.kind === "global" ? "Global" : "Project";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="flex h-[80vh] w-[min(1100px,95vw)] flex-col rounded-lg border border-border-card bg-bg-card shadow-xl">
+  const panel = (
+    <div
+      data-testid="skills-preview-root"
+      data-preview-mode={settings.previewMode}
+      className={panelClass}
+    >
         <div className="flex items-center justify-between border-b border-border-card px-4 py-2">
           <div className="flex items-center gap-3">
             <div className="font-mono text-[11px] uppercase tracking-wide text-text-muted">{scopeLabel}</div>
@@ -111,7 +133,11 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
             )}
           </div>
         </div>
-      </div>
+    </div>
+  );
+
+  const nested = (
+    <>
       <NewSkillDialog
         open={showNew}
         defaultKind={kind}
@@ -130,6 +156,27 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
           setShowDelete(false);
         }}
       />
+    </>
+  );
+
+  if (isSidePeek) {
+    return (
+      <>
+        {panel}
+        {nested}
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) attemptClose();
+      }}
+    >
+      {panel}
+      {nested}
     </div>
   );
 }

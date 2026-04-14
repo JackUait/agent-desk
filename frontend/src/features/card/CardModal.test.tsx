@@ -93,6 +93,25 @@ describe("CardModal", () => {
     expect(input).toBeDisabled();
   });
 
+  it("defaults to modal layout when previewMode is not passed", () => {
+    renderModal();
+    const root = screen.getByTestId("card-preview-root");
+    expect(root).toHaveAttribute("data-preview-mode", "modal");
+  });
+
+  it("renders as a right-docked side-peek when previewMode='side-peek'", () => {
+    renderModal({ previewMode: "side-peek" });
+    const root = screen.getByTestId("card-preview-root");
+    expect(root).toHaveAttribute("data-preview-mode", "side-peek");
+    expect(screen.getByDisplayValue("Implement auth flow")).toBeInTheDocument();
+    expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
+  });
+
+  it("side-peek renders no backdrop so the page behind is clickable", () => {
+    renderModal({ previewMode: "side-peek" });
+    expect(screen.queryByTestId("modal-overlay")).not.toBeInTheDocument();
+  });
+
   it("renders the chooser with effort inside the modal", () => {
     renderModal({
       card: makeCard({ model: "claude-sonnet-4-6", effort: "high" }),
