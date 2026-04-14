@@ -88,6 +88,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			CardID:    cardID,
 			SessionID: c.SessionID,
 			Model:     c.Model,
+			Effort:    c.Effort,
 			Message:   message,
 			WorkDir:   workDir,
 		}, events); sendErr != nil {
@@ -109,6 +110,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Type    string `json:"type"`
 			Content string `json:"content"`
 			Model   string `json:"model,omitempty"`
+			Effort  string `json:"effort,omitempty"`
 		}
 		if jsonErr := json.Unmarshal(data, &msg); jsonErr != nil {
 			continue
@@ -124,6 +126,19 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				updated, svcErr := h.cardSvc.SetModel(cardID, msg.Model)
 				if svcErr != nil {
 					log.Printf("ws: SetModel error for card %s: %v", cardID, svcErr)
+					h.broadcastError(cardID, svcErr.Error())
+					break
+				}
+				h.broadcastCard(cardID, updated)
+			}
+			if msg.Effort != "" {
+				if !agent.IsAllowedEffort(msg.Effort) {
+					h.broadcastError(cardID, "unknown effort: "+msg.Effort)
+					break
+				}
+				updated, svcErr := h.cardSvc.SetEffort(cardID, msg.Effort)
+				if svcErr != nil {
+					log.Printf("ws: SetEffort error for card %s: %v", cardID, svcErr)
 					h.broadcastError(cardID, svcErr.Error())
 					break
 				}

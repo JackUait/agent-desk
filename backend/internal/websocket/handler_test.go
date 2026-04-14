@@ -99,6 +99,17 @@ func argvContainsModel(argv []string, id string) bool {
 	return false
 }
 
+// argvContainsEffort returns true if the argv has "--effort level" as
+// adjacent entries.
+func argvContainsEffort(argv []string, level string) bool {
+	for i, a := range argv {
+		if a == "--effort" && i+1 < len(argv) && argv[i+1] == level {
+			return true
+		}
+	}
+	return false
+}
+
 // waitForSpyArgv polls until the spy binary has recorded at least one
 // invocation or the deadline elapses.
 func waitForSpyArgv(t *testing.T, path string, timeout time.Duration) [][]string {
@@ -698,6 +709,205 @@ func TestHandler_StartFrame_IgnoresClientModelField(t *testing.T) {
 	got, _ := svc.GetCard(cardID)
 	if got.Model != "claude-haiku-4-5" {
 		t.Fatalf("expected card model unchanged, got %q", got.Model)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_ValidEffort_PersistsAndSpawnsWithFlag(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "claude-sonnet-4-6",
+		"effort":  "high",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "high") {
+		t.Fatalf("expected --effort high in argv; got %v", inv[0])
+	}
+
+	got, err := svc.GetCard(cardID)
+	if err != nil {
+		t.Fatalf("GetCard: %v", err)
+	}
+	if got.Effort != "high" {
+		t.Fatalf("expected persisted effort high, got %q", got.Effort)
+	}
+
+	// Drain at least one card_update frame from the connection to confirm
+	// the broadcast happened. Model update (from claude-sonnet-4-6) and
+	// effort update each broadcast a card_update; read both and look for
+	// the one with effort = "high".
+	conn.SetReadLimit(1 << 20)
+	deadline, cancelR := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelR()
+	foundEffort := false
+	for !foundEffort {
+		_, raw, readErr := conn.Read(deadline)
+		if readErr != nil {
+			break
+		}
+		var frame struct {
+			Type   string `json:"type"`
+			Fields struct {
+				Effort string `json:"effort"`
+			} `json:"fields"`
+		}
+		if err := json.Unmarshal(raw, &frame); err != nil {
+			continue
+		}
+		if frame.Type == "card_update" && frame.Fields.Effort == "high" {
+			foundEffort = true
+		}
+	}
+	if !foundEffort {
+		t.Error("expected a card_update frame with effort=high")
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_InvalidEffort_BroadcastsErrorNoSpawn(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+		"model":   "claude-opus-4-6",
+		"effort":  "ultra",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Expect at least one error frame referencing unknown effort.
+	conn.SetReadLimit(1 << 20)
+	deadline, cancelR := context.WithTimeout(ctx, 2*time.Second)
+	defer cancelR()
+	foundErr := false
+	for !foundErr {
+		_, raw, readErr := conn.Read(deadline)
+		if readErr != nil {
+			break
+		}
+		var resp struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			continue
+		}
+		if resp.Type == "error" && strings.Contains(resp.Message, "unknown effort") {
+			foundErr = true
+		}
+	}
+	if !foundErr {
+		t.Fatal("expected an error frame containing 'unknown effort'")
+	}
+
+	// No spawn should have occurred.
+	time.Sleep(100 * time.Millisecond)
+	if inv := readSpyArgv(t, argvFile); len(inv) != 0 {
+		t.Fatalf("expected zero spawns, got %d: %v", len(inv), inv)
+	}
+
+	// Card effort must NOT have been persisted.
+	got, _ := svc.GetCard(cardID)
+	if got.Effort != "" {
+		t.Fatalf("expected empty card.Effort, got %q", got.Effort)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Message_AbsentEffort_UsesPersistedValue(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set effort on the card so the handler must read it from persistence.
+	if _, err := svc.SetEffort(cardID, "low"); err != nil {
+		t.Fatalf("pre-set effort: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "low") {
+		t.Fatalf("expected --effort low in argv; got %v", inv[0])
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
+func TestWS_Start_IgnoresClientEffort(t *testing.T) {
+	argvFile := filepath.Join(t.TempDir(), "argv.txt")
+	srv, svc, cardID := buildServerWithSpy(t, argvFile)
+
+	// Pre-set effort = medium so we can see that start uses the persisted
+	// value, not a client-supplied "max".
+	if _, err := svc.SetEffort(cardID, "medium"); err != nil {
+		t.Fatalf("pre-set effort: %v", err)
+	}
+
+	conn, ctx, cancel := dialWS(t, srv, cardID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":   "start",
+		"effort": "max",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) == 0 {
+		t.Fatal("expected one spawn invocation, got none")
+	}
+	if !argvContainsEffort(inv[0], "medium") {
+		t.Fatalf("expected persisted --effort medium in argv; got %v", inv[0])
+	}
+	if argvContainsEffort(inv[0], "max") {
+		t.Fatalf("start frame must not honour client effort; got %v", inv[0])
+	}
+
+	// Card effort must remain unchanged.
+	got, _ := svc.GetCard(cardID)
+	if got.Effort != "medium" {
+		t.Fatalf("expected card.Effort unchanged (medium), got %q", got.Effort)
 	}
 
 	conn.Close(gowebsocket.StatusNormalClosure, "")
