@@ -12,20 +12,22 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 	gowebsocket "nhooyr.io/websocket"
 )
 
 // Handler wires WebSocket connections to the Hub and Agent Manager.
 type Handler struct {
-	hub     *Hub
-	manager *agent.Manager
-	cardSvc *card.Service
+	hub          *Hub
+	manager      *agent.Manager
+	cardSvc      *card.Service
+	projectStore *project.Store
 }
 
 // NewHandler returns a Handler.
-func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service) *Handler {
-	return &Handler{hub: hub, manager: manager, cardSvc: cardSvc}
+func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store) *Handler {
+	return &Handler{hub: hub, manager: manager, cardSvc: cardSvc, projectStore: projectStore}
 }
 
 // HandleWebSocket upgrades the HTTP connection for card {id} to WebSocket,
@@ -77,8 +79,18 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// sendToAgent spawns a per-message Claude CLI process and bridges events.
 	sendToAgent := func(message string) {
 		c, _ = h.cardSvc.GetCard(cardID)
+		var workDir string
+		if proj, ok := h.projectStore.Get(c.ProjectID); ok {
+			workDir = proj.Path
+		}
 		events := make(chan agent.StreamEvent, 64)
-		if sendErr := h.manager.Send(cardID, c.SessionID, c.Model, message, events); sendErr != nil {
+		if sendErr := h.manager.Send(agent.SendRequest{
+			CardID:    cardID,
+			SessionID: c.SessionID,
+			Model:     c.Model,
+			Message:   message,
+			WorkDir:   workDir,
+		}, events); sendErr != nil {
 			log.Printf("ws: send error for card %s: %v", cardID, sendErr)
 			h.broadcastError(cardID, sendErr.Error())
 			return

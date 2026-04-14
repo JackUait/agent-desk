@@ -10,23 +10,32 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 )
+
+// noopGit satisfies project.Git without touching the filesystem.
+type noopGit struct{}
+
+func (noopGit) IsRepo(path string) bool { return true }
+func (noopGit) Init(path string) error  { return nil }
 
 func newHandler() *card.Handler {
 	store := card.NewStore()
 	svc := card.NewService(store)
 	agentMgr := agent.NewManager("echo")
-	worktreeSvc := worktree.NewService("/tmp", "/tmp/worktrees")
-	return card.NewHandler(svc, agentMgr, worktreeSvc)
+	worktreeMgr := worktree.NewManager()
+	projStore := project.NewStore(noopGit{})
+	return card.NewHandler(svc, agentMgr, worktreeMgr, projStore)
 }
 
 func newHandlerWithSvc() (*card.Handler, *card.Service) {
 	store := card.NewStore()
 	svc := card.NewService(store)
 	agentMgr := agent.NewManager("echo")
-	worktreeSvc := worktree.NewService("/tmp", "/tmp/worktrees")
-	return card.NewHandler(svc, agentMgr, worktreeSvc), svc
+	worktreeMgr := worktree.NewManager()
+	projStore := project.NewStore(noopGit{})
+	return card.NewHandler(svc, agentMgr, worktreeMgr, projStore), svc
 }
 
 func TestCreateCard(t *testing.T) {

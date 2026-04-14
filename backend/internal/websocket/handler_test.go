@@ -15,9 +15,16 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/project"
 	wsinternal "github.com/jackuait/agent-desk/backend/internal/websocket"
 	gowebsocket "nhooyr.io/websocket"
 )
+
+// noopGit satisfies project.Git without touching the filesystem.
+type noopGit struct{}
+
+func (noopGit) IsRepo(path string) bool { return true }
+func (noopGit) Init(path string) error  { return nil }
 
 // spyClaudeBin writes a tiny shell script that appends each invocation's
 // argv to argvFile (one arg per line, invocation-separated by a blank line)
@@ -71,7 +78,8 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(spyClaudeBin(t, argvFile))
-	h := wsinternal.NewHandler(hub, manager, svc)
+	projStore := project.NewStore(noopGit{})
+	h := wsinternal.NewHandler(hub, manager, svc, projStore)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -117,7 +125,8 @@ func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinte
 	hub = wsinternal.NewHub()
 	// Use "false" as the agent binary — it exits immediately so tests don't hang.
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	projStore := project.NewStore(noopGit{})
+	h := wsinternal.NewHandler(hub, manager, svc, projStore)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -222,7 +231,7 @@ func collectBridgeFrames(t *testing.T, events []agent.StreamEvent) (string, []ma
 	c := svc.CreateCard("proj-test", "bridge test")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -472,7 +481,7 @@ func TestEventBridge_ReadyForReviewStillMovesCard(t *testing.T) {
 	}
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -747,7 +756,7 @@ func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge persist")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -790,7 +799,7 @@ func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge empty")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc)
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
