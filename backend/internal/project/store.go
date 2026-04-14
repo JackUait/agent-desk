@@ -14,18 +14,6 @@ type Git interface {
 	Init(path string) error
 }
 
-type StubGit struct {
-	IsRepoVal  bool
-	InitErr    error
-	InitCalled []string
-}
-
-func (s *StubGit) IsRepo(path string) bool { return s.IsRepoVal }
-func (s *StubGit) Init(path string) error {
-	s.InitCalled = append(s.InitCalled, path)
-	return s.InitErr
-}
-
 type Store struct {
 	mu       sync.RWMutex
 	git      Git
@@ -40,14 +28,14 @@ func NewStore(git Git) *Store {
 }
 
 func (s *Store) Create(path string) (Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if !s.git.IsRepo(path) {
 		if err := s.git.Init(path); err != nil {
 			return Project{}, err
 		}
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	p := Project{
 		ID:        newID(),
