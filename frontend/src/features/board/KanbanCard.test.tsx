@@ -65,3 +65,33 @@ describe("KanbanCard", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
+
+function makeCard(overrides: Partial<Card> = {}): Card {
+  return { ...card, ...overrides };
+}
+
+describe("KanbanCard new fields", () => {
+  it("renders summary as secondary line", () => {
+    const c = makeCard({ title: "t", summary: "refactoring auth" });
+    render(<KanbanCard card={c} />);
+    expect(screen.getByText("refactoring auth")).toBeInTheDocument();
+  });
+
+  it("renders label chips", () => {
+    const c = makeCard({ title: "t", labels: ["bug"] });
+    render(<KanbanCard card={c} />);
+    expect(screen.getByText("bug")).toBeInTheDocument();
+  });
+
+  it("renders thin progress bar when progress set", () => {
+    const c = makeCard({ title: "t", progress: { step: 1, totalSteps: 3, currentStep: "x" } });
+    render(<KanbanCard card={c} />);
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+  });
+
+  it("renders blocked dot when reason set", () => {
+    const c = makeCard({ title: "t", blockedReason: "stuck" });
+    render(<KanbanCard card={c} />);
+    expect(screen.getByTestId("blocked-dot")).toBeInTheDocument();
+  });
+});
