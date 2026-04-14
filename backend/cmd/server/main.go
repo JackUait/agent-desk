@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/mcp"
@@ -57,13 +59,27 @@ func main() {
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
 
+	// Attachments storage rooted at $AGENT_DESK_HOME/cards (default: $HOME/.agent-desk/cards).
+	homeDir := os.Getenv("AGENT_DESK_HOME")
+	if homeDir == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			homeDir = filepath.Join(h, ".agent-desk")
+		} else {
+			homeDir = filepath.Join(os.TempDir(), "agent-desk")
+		}
+	}
+	attStore := attachment.NewStore(filepath.Join(homeDir, "cards"))
+	attSvc := attachment.NewService(attStore, func() int64 { return time.Now().Unix() })
+	attHandler := attachment.NewHandlerWithRecorder(attSvc, cardSvc)
+	attHandler.RegisterRoutes(mux)
+
 	wsHub := ws.NewHub()
 
 	mcpSessions := mcp.NewSessions()
-	mcpHandler := mcp.NewServer(cardSvc, mcpSessions, wsHub)
+	mcpHandler := mcp.NewServer(cardSvc, mcpSessions, wsHub, attSvc)
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
-	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, mcpSessions, 8080)
+	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, mcpSessions, 8080, attSvc)
 	wsHandler.RegisterRoutes(mux)
 
 	modelsHandler := agent.NewModelsHandler()

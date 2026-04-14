@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
 	"github.com/jackuait/agent-desk/backend/internal/mcp"
@@ -18,6 +19,12 @@ import (
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 	gowebsocket "nhooyr.io/websocket"
 )
+
+// AttachmentLister is the subset of attachment.Service the WS handler needs
+// to resolve filenames → (size, mime) when wrapping the agent message.
+type AttachmentLister interface {
+	List(cardID string) ([]attachment.Attachment, error)
+}
 
 type attachmentLookup func(cardID, name string) (agent.AttachmentInfo, bool)
 
@@ -55,13 +62,15 @@ type Handler struct {
 	projectStore *project.Store
 	sessions     *mcp.Sessions
 	mcpPort      int
+	attachments  AttachmentLister
 }
 
 // NewHandler returns a Handler. sessions and mcpPort may be nil/0; when both
 // are configured the handler mints a per-turn MCP session token and writes a
 // temp .mcp.json that the spawned agent uses to call back into the local
-// MCP server.
-func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store, sessions *mcp.Sessions, mcpPort int) *Handler {
+// MCP server. attachments may be nil; when non-nil it resolves attachment
+// filenames to size+mime when wrapping agent messages.
+func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store, sessions *mcp.Sessions, mcpPort int, attachments AttachmentLister) *Handler {
 	return &Handler{
 		hub:          hub,
 		manager:      manager,
@@ -69,6 +78,28 @@ func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, project
 		projectStore: projectStore,
 		sessions:     sessions,
 		mcpPort:      mcpPort,
+		attachments:  attachments,
+	}
+}
+
+// attachmentLookupFn returns a closure that resolves a filename for a given
+// cardID to its AttachmentInfo by querying the AttachmentLister. Returns a
+// name-only stub when attachments is nil or the file is not found.
+func (h *Handler) attachmentLookupFn() attachmentLookup {
+	return func(cardID, name string) (agent.AttachmentInfo, bool) {
+		if h.attachments == nil {
+			return agent.AttachmentInfo{Name: name}, true
+		}
+		list, err := h.attachments.List(cardID)
+		if err != nil {
+			return agent.AttachmentInfo{Name: name}, false
+		}
+		for _, a := range list {
+			if a.Name == name {
+				return agent.AttachmentInfo{Name: a.Name, Size: a.Size, MIMEType: a.MIMEType}, true
+			}
+		}
+		return agent.AttachmentInfo{Name: name}, false
 	}
 }
 
@@ -151,7 +182,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		wrappedMessage := buildAgentMessage(h.cardSvc, cardID, message, nil)
+		wrappedMessage := buildAgentMessage(h.cardSvc, cardID, message, h.attachmentLookupFn())
 		events := make(chan agent.StreamEvent, 64)
 		if sendErr := h.manager.Send(agent.SendRequest{
 			CardID:        cardID,
