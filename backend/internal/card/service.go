@@ -45,6 +45,7 @@ func (s *Service) DeleteCard(id string) error {
 }
 
 // UpdateFields applies a partial update to allowed string and slice fields.
+// Stamps UpdatedAt on any successful change.
 func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 	c, err := s.GetCard(id)
 	if err != nil {
@@ -72,10 +73,63 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 			if sl, ok := toStringSlice(v); ok {
 				c.RelevantFiles = sl
 			}
+		case "labels":
+			if sl, ok := toStringSlice(v); ok {
+				c.Labels = sl
+			}
 		}
 	}
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
+}
+
+// AddAcceptanceCriterion appends text to the acceptance-criteria list.
+func (s *Service) AddAcceptanceCriterion(id, text string) (Card, error) {
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.AcceptanceCriteria = append(c.AcceptanceCriteria, text)
+	s.touch(&c)
+	return c, nil
+}
+
+// RemoveAcceptanceCriterion removes the AC at the given index.
+func (s *Service) RemoveAcceptanceCriterion(id string, index int) (Card, error) {
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	if index < 0 || index >= len(c.AcceptanceCriteria) {
+		return Card{}, fmt.Errorf("acceptance criterion index %d out of range [0, %d)", index, len(c.AcceptanceCriteria))
+	}
+	c.AcceptanceCriteria = append(c.AcceptanceCriteria[:index], c.AcceptanceCriteria[index+1:]...)
+	s.touch(&c)
+	return c, nil
+}
+
+// SetColumn dispatches to the matching state-machine transition.
+// Returns an error for illegal transitions. Same-column is a no-op.
+func (s *Service) SetColumn(id string, target Column) (Card, error) {
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	if c.Column == target {
+		return c, nil
+	}
+	switch {
+	case c.Column == ColumnBacklog && target == ColumnInProgress:
+		return s.StartDevelopment(id)
+	case c.Column == ColumnInProgress && target == ColumnReview:
+		return s.MoveToReview(id)
+	case c.Column == ColumnReview && target == ColumnInProgress:
+		return s.RejectToInProgress(id)
+	case c.Column == ColumnReview && target == ColumnDone:
+		return s.MoveToDone(id)
+	default:
+		return Card{}, fmt.Errorf("illegal column transition %q → %q", c.Column, target)
+	}
 }
 
 // StartDevelopment transitions a card from Backlog → InProgress.
@@ -88,7 +142,7 @@ func (s *Service) StartDevelopment(id string) (Card, error) {
 		return Card{}, fmt.Errorf("StartDevelopment requires column %q, card is in %q", ColumnBacklog, c.Column)
 	}
 	c.Column = ColumnInProgress
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -102,7 +156,7 @@ func (s *Service) MoveToReview(id string) (Card, error) {
 		return Card{}, fmt.Errorf("MoveToReview requires column %q, card is in %q", ColumnInProgress, c.Column)
 	}
 	c.Column = ColumnReview
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -116,7 +170,7 @@ func (s *Service) RejectToInProgress(id string) (Card, error) {
 		return Card{}, fmt.Errorf("RejectToInProgress requires column %q, card is in %q", ColumnReview, c.Column)
 	}
 	c.Column = ColumnInProgress
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -130,7 +184,7 @@ func (s *Service) SetPRUrl(id, prUrl string) (Card, error) {
 		return Card{}, fmt.Errorf("SetPRUrl requires column %q, card is in %q", ColumnReview, c.Column)
 	}
 	c.PRUrl = prUrl
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -147,7 +201,7 @@ func (s *Service) MoveToDone(id string) (Card, error) {
 		return Card{}, fmt.Errorf("MoveToDone requires a PR URL to be set first")
 	}
 	c.Column = ColumnDone
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -159,7 +213,7 @@ func (s *Service) SetWorktree(id, path, branch string) (Card, error) {
 	}
 	c.WorktreePath = path
 	c.BranchName = branch
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -175,7 +229,7 @@ func (s *Service) SetModel(id, model string) (Card, error) {
 		return Card{}, err
 	}
 	c.Model = model
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -191,7 +245,7 @@ func (s *Service) SetEffort(id, effort string) (Card, error) {
 		return Card{}, err
 	}
 	c.Effort = effort
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
@@ -223,7 +277,7 @@ func (s *Service) SetSessionID(id, sessionID string) (Card, error) {
 		return Card{}, err
 	}
 	c.SessionID = sessionID
-	s.store.Update(c)
+	s.touch(&c)
 	return c, nil
 }
 
