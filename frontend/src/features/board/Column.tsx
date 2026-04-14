@@ -1,5 +1,4 @@
 import type { Card, Column as ColumnType } from "../../shared/types/domain";
-import { Badge } from "@/components/ui/badge";
 import { KanbanCard } from "./KanbanCard";
 
 interface ColumnProps {
@@ -12,29 +11,40 @@ interface ColumnProps {
   onAddCard?: (position: "top" | "bottom") => void;
 }
 
-export function Column({ column, cards, enteringCards, exitingCards, workingCards, onCardClick, onAddCard }: ColumnProps) {
+export function Column({
+  column,
+  cards,
+  enteringCards,
+  exitingCards,
+  workingCards,
+  onCardClick,
+  onAddCard,
+}: ColumnProps) {
+  const empty = column.cardIds.length === 0;
   return (
-    <section className="flex min-w-[280px] max-w-[320px] flex-col gap-3 rounded-lg bg-bg-hover p-3">
-      <div className="flex items-center justify-between px-1 pb-1">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-          {column.title}
-        </h2>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">{column.cardIds.length}</Badge>
-          {onAddCard && (
-            <button
-              type="button"
-              aria-label="Add card to top"
-              data-sidepeek-safe
-              onClick={() => onAddCard("top")}
-              className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-text-secondary transition hover:bg-bg-page hover:text-text-primary"
-            >
-              +
-            </button>
-          )}
+    <section className="group/col flex min-w-[280px] max-w-[320px] flex-col">
+      <div className="flex items-center justify-between gap-2 pb-3">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-[12px] font-medium text-text-secondary">
+            {column.title}
+          </h2>
+          <span className="text-[12px] tabular-nums text-text-muted">
+            {column.cardIds.length}
+          </span>
         </div>
+        {onAddCard && (
+          <button
+            type="button"
+            aria-label="Add card to top"
+            data-sidepeek-safe
+            onClick={() => onAddCard("top")}
+            className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-[3px] text-text-muted opacity-0 transition hover:bg-bg-hover hover:text-text-primary group-hover/col:opacity-100"
+          >
+            +
+          </button>
+        )}
       </div>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {column.cardIds.map((cardId) => {
           const card = cards[cardId];
           if (!card) return null;
@@ -56,7 +66,10 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
           type="button"
           data-sidepeek-safe
           onClick={() => onAddCard("bottom")}
-          className="mt-1 cursor-pointer rounded-md border border-dashed border-border-card px-2 py-2 text-xs text-text-secondary transition hover:border-text-secondary hover:text-text-primary"
+          className={
+            "mt-2 cursor-pointer rounded-[4px] px-2 py-2 text-left text-[12px] text-text-muted transition hover:bg-bg-hover hover:text-text-primary " +
+            (empty ? "opacity-60" : "opacity-0 group-hover/col:opacity-100")
+          }
         >
           + Add a card
         </button>

@@ -6,19 +6,26 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-bg-page: #f7f6f3;
-  --color-bg-card: #ffffff;
-  --color-bg-hover: rgba(55, 53, 47, 0.04);
+  --color-bg-page: #f6f5f1;
+  --color-bg-surface: #f1efe9;
+  --color-bg-card: #fdfcf9;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: rgba(55, 53, 47, 0.035);
+  --color-bg-selected: rgba(35, 131, 226, 0.08);
 
-  --color-border-card: rgba(55, 53, 47, 0.09);
+  --color-border-card: rgba(55, 53, 47, 0.08);
+  --color-border-strong: rgba(55, 53, 47, 0.14);
+  --color-border-hairline: rgba(55, 53, 47, 0.05);
 
-  --color-text-primary: #37352f;
-  --color-text-secondary: #73726e;
-  --color-text-muted: #afafad;
+  --color-text-primary: #2b2a26;
+  --color-text-secondary: #6b6a65;
+  --color-text-muted: #a9a8a3;
 
-  --color-accent-blue: #2383e2;
-  --color-accent-blue-bg: rgba(35, 131, 226, 0.1);
-  --color-status-done: #2eaadc;
+  --color-accent-blue: #1f6feb;
+  --color-accent-blue-bg: rgba(31, 111, 235, 0.08);
+  --color-status-done: #1f9d55;
+  --color-status-blocked: #d97706;
+  --color-status-review: #a855f7;
 
   --font-sans: "DM Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;

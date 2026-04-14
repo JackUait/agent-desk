@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpenIcon } from "lucide-react";
+import { BookOpenIcon, ChevronsLeftIcon } from "lucide-react";
 import { SkillsDialog } from "../skills/SkillsDialog";
 import type { Project } from "../../shared/types/domain";
 
@@ -8,6 +8,7 @@ interface Props {
   activeId: string | null;
   onNewProject: () => void;
   onSelect: (id: string) => void;
+  onClose?: () => void;
 }
 
 const COLOR_VARS = [
@@ -19,28 +20,75 @@ const COLOR_VARS = [
   "--color-project-6",
 ];
 
-export function ProjectSidebar({ projects, activeId, onNewProject, onSelect }: Props) {
+export function ProjectSidebar({
+  projects,
+  activeId,
+  onNewProject,
+  onSelect,
+  onClose,
+}: Props) {
   const [skillsForProjectId, setSkillsForProjectId] = useState<string | null>(null);
   return (
-    <aside className="flex w-60 flex-col border-r border-border-card bg-[#f2f0eb]">
-      <div className="flex-1 overflow-y-auto py-6">
+    <aside className="group/sidebar flex w-[224px] flex-col border-r border-border-hairline bg-bg-page">
+      <div className="flex items-center gap-1 px-3 pt-5 pb-3">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-[5px] px-2 py-1.5 text-left text-[13px] font-medium text-text-primary transition-colors hover:bg-[rgba(55,53,47,0.04)]"
+        >
+          <svg
+            width={16}
+            height={16}
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="shrink-0 text-accent-blue"
+          >
+            <rect
+              x="1.75"
+              y="3.25"
+              width="11"
+              height="9.5"
+              rx="1.75"
+              fill="currentColor"
+              fillOpacity="0.16"
+              stroke="currentColor"
+              strokeWidth="1.1"
+            />
+            <circle cx="12.5" cy="3.5" r="2.35" fill="currentColor" />
+          </svg>
+          <span className="truncate tracking-[-0.005em]">
+            agent<span className="text-text-muted">·</span>desk
+          </span>
+        </button>
+        {onClose && (
+          <button
+            type="button"
+            aria-label="close sidebar"
+            onClick={onClose}
+            className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-[4px] text-text-muted opacity-0 transition hover:bg-[rgba(55,53,47,0.06)] hover:text-text-secondary group-hover/sidebar:opacity-100"
+          >
+            <ChevronsLeftIcon width={14} height={14} strokeWidth={1.75} />
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2">
         {projects.map((p) => {
           const color = `var(${COLOR_VARS[p.colorIdx % 6]})`;
           const active = p.id === activeId;
           return (
             <div
               key={p.id}
-              className="group flex w-full items-center gap-2 pr-2 data-[active=true]:bg-bg-hover"
+              className="group relative mb-[1px] flex w-full items-center rounded-[5px] transition-colors data-[active=true]:bg-[rgba(55,53,47,0.055)]"
               data-active={active ? "true" : "false"}
             >
               <button
                 type="button"
                 onClick={() => onSelect(p.id)}
-                className="flex flex-1 cursor-pointer items-center gap-3 px-5 py-2 text-left font-mono text-[13px] tracking-tight text-text-secondary transition data-[active=true]:text-text-primary hover:text-text-primary"
+                className="flex flex-1 cursor-pointer items-center gap-2 rounded-[5px] px-3 py-[5px] text-left text-[13px] text-text-secondary transition-colors hover:text-text-primary data-[active=true]:font-medium data-[active=true]:text-text-primary"
                 data-active={active ? "true" : "false"}
               >
                 <span
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  className="inline-block h-[7px] w-[7px] shrink-0 rounded-[2px]"
                   style={{ backgroundColor: color }}
                 />
                 <span className="truncate">{p.title}</span>
@@ -50,21 +98,25 @@ export function ProjectSidebar({ projects, activeId, onNewProject, onSelect }: P
                 aria-label={`skills for ${p.title}`}
                 data-active={active ? "true" : "false"}
                 onClick={() => setSkillsForProjectId(p.id)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-bg-hover hover:text-text-primary group-hover:opacity-100 data-[active=true]:opacity-100"
+                className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-[3px] text-text-muted opacity-0 transition hover:bg-[rgba(55,53,47,0.06)] hover:text-text-secondary group-hover:opacity-100 data-[active=true]:opacity-100"
               >
-                <BookOpenIcon width={12} height={12} />
+                <BookOpenIcon width={12} height={12} strokeWidth={1.75} />
               </button>
             </div>
           );
         })}
       </div>
-      <div className="border-t border-border-card p-4">
+
+      <div className="px-3 pb-5 pt-2">
         <button
           type="button"
           onClick={onNewProject}
-          className="w-full cursor-pointer rounded-md px-3 py-2 text-left font-mono text-[12px] text-text-secondary transition hover:bg-bg-hover hover:text-text-primary"
+          className="flex w-full cursor-pointer items-center gap-2 rounded-[5px] px-3 py-[5px] text-left text-[13px] text-text-muted transition-colors hover:text-text-primary"
         >
-          + new project
+          <span className="inline-block h-[7px] w-[7px] shrink-0 text-[11px] leading-[7px]">
+            +
+          </span>
+          new project
         </button>
       </div>
       {skillsForProjectId && (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronsRightIcon } from "lucide-react";
 import { useProjects } from "./use-projects";
 import { ProjectSidebar } from "./ProjectSidebar";
 import { ProjectBoard } from "./ProjectBoard";
@@ -118,6 +119,27 @@ export function ProjectsPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [toDelete, setToDelete] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const v = window.localStorage.getItem("agentdesk-sidebar-open");
+    return v === null ? true : v === "true";
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("agentdesk-sidebar-open", String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setSidebarOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const selectedCard = useMemo(() => {
     if (!selectedCardId) return null;
@@ -155,6 +177,7 @@ export function ProjectsPage() {
   if (projects.length === 0) {
     return (
       <div className="flex h-screen bg-bg-page">
+        <SettingsButton />
         <main className="flex-1 overflow-y-auto">
           <EmptyState onPickFolder={createProject} />
         </main>
@@ -165,14 +188,31 @@ export function ProjectsPage() {
   return (
     <div className="flex h-screen bg-bg-page">
       <SettingsButton />
-      <ProjectSidebar
-        projects={projects}
-        activeId={activeProjectId}
-        onNewProject={createProject}
-        onSelect={handleSelect}
-      />
+      {sidebarOpen && (
+        <ProjectSidebar
+          projects={projects}
+          activeId={activeProjectId}
+          onNewProject={createProject}
+          onSelect={handleSelect}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
+      {!sidebarOpen && (
+        <button
+          type="button"
+          aria-label="open sidebar"
+          onClick={() => setSidebarOpen(true)}
+          className="fixed left-3 top-3 z-30 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition hover:bg-[rgba(55,53,47,0.05)] hover:text-text-primary"
+        >
+          <ChevronsRightIcon width={16} height={16} strokeWidth={1.75} />
+        </button>
+      )}
       <main ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-16 py-12 pl-12 pr-12">
+        <div
+          className={`flex flex-col gap-20 pt-14 pb-20 pr-12 ${
+            sidebarOpen ? "pl-12" : "pl-16"
+          }`}
+        >
           {projects.map((p) => (
             <ProjectBoard
               key={p.id}

@@ -1,5 +1,4 @@
 import type { Card } from "../../shared/types/domain";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface KanbanCardProps {
@@ -11,6 +10,15 @@ interface KanbanCardProps {
   onClick?: () => void;
 }
 
+function timeAgo(sec: number): string {
+  if (!sec) return "";
+  const diff = Math.max(0, Math.floor(Date.now() / 1000 - sec));
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
+}
+
 export function KanbanCard({
   card,
   columnId,
@@ -20,41 +28,38 @@ export function KanbanCard({
   onClick,
 }: KanbanCardProps) {
   const isDone = columnId === "col-done";
+  const age = timeAgo(card.createdAt);
 
   return (
     <article
       data-sidepeek-safe
       onClick={onClick}
       className={cn(
-        "relative group flex cursor-pointer flex-col gap-3 rounded-lg border border-border-card bg-bg-card p-4 transition",
-        "hover:bg-bg-hover hover:shadow-sm",
-        columnId === "col-backlog" && "opacity-90",
-        isDone && "opacity-80",
+        "relative group/card flex cursor-pointer flex-col gap-1.5 rounded-[6px] bg-bg-card px-3 py-2.5 shadow-[0_1px_0_rgba(55,53,47,0.08),0_1px_2px_rgba(55,53,47,0.04)] transition",
+        "hover:shadow-[0_1px_0_rgba(55,53,47,0.12),0_4px_12px_rgba(55,53,47,0.06)]",
+        isDone && "opacity-70",
         isEntering && "entering animate-in fade-in slide-in-from-top-2 duration-300",
         isExiting && "exiting animate-out fade-out slide-out-to-bottom-2 duration-300",
-        isWorking && "working ring-1 ring-accent-blue/40",
+        isWorking && "working",
       )}
     >
-      <div className="flex items-start gap-2">
-        <div
-          className={cn(
-            "mt-1.5 h-2 w-2 shrink-0 rounded-full",
-            isDone ? "bg-status-done" : "bg-accent-blue",
-          )}
-        />
-        <h3 className="text-sm font-medium leading-snug text-text-primary">
-          {card.title}
-        </h3>
-      </div>
-      {card.summary && (
-        <p className="text-xs text-text-secondary line-clamp-1">{card.summary}</p>
+      <h3 className="text-[13px] font-medium leading-snug text-text-primary">
+        {card.title}
+      </h3>
+      {(card.summary || card.description) && (
+        <p className="text-[12px] leading-snug text-text-secondary line-clamp-2">
+          {card.summary || card.description}
+        </p>
+      )}
+      {card.description && card.summary && (
+        <p className="sr-only">{card.description}</p>
       )}
       {card.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 pt-0.5">
           {card.labels.map((l) => (
             <span
               key={l}
-              className="rounded bg-bg-hover px-1.5 py-0.5 text-[10px] text-text-secondary"
+              className="rounded-[3px] bg-bg-hover px-1.5 py-0.5 text-[10px] text-text-secondary"
             >
               {l}
             </span>
@@ -66,7 +71,7 @@ export function KanbanCard({
           role="progressbar"
           aria-valuenow={card.progress.step}
           aria-valuemax={card.progress.totalSteps}
-          className="h-[2px] w-full rounded bg-bg-hover overflow-hidden"
+          className="mt-0.5 h-[2px] w-full overflow-hidden rounded-full bg-border-hairline"
         >
           <div
             className="h-full bg-accent-blue"
@@ -77,26 +82,27 @@ export function KanbanCard({
         </div>
       )}
       {isWorking && (
-        <div className="flex flex-wrap gap-1.5">
-          <Badge
-            data-testid="agent-status"
-            variant="secondary"
-            className="bg-accent-blue-bg text-accent-blue"
-          >
-            Working
-          </Badge>
+        <div
+          data-testid="agent-status"
+          className="flex items-center gap-1.5 pt-0.5 text-[11px] text-accent-blue"
+        >
+          <span className="relative inline-flex h-1.5 w-1.5">
+            <span className="absolute inset-0 animate-ping rounded-full bg-accent-blue/60" />
+            <span className="relative h-1.5 w-1.5 rounded-full bg-accent-blue" />
+          </span>
+          working
         </div>
       )}
-      {card.description && (
-        <p className="text-xs leading-relaxed text-text-secondary line-clamp-3">
-          {card.description}
-        </p>
+      {age && (
+        <span className="pointer-events-none absolute right-2.5 top-2.5 text-[10px] text-text-muted opacity-0 transition-opacity group-hover/card:opacity-100">
+          {age}
+        </span>
       )}
       {card.blockedReason && (
         <span
           data-testid="blocked-dot"
           aria-label={`blocked: ${card.blockedReason}`}
-          className="absolute right-2 top-2 h-2 w-2 rounded-full bg-amber-500"
+          className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-status-blocked"
         />
       )}
     </article>

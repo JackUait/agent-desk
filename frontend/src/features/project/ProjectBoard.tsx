@@ -21,9 +21,9 @@ export function ProjectBoard({
 }: Props) {
   const cardCount = Object.keys(cards).length;
   return (
-    <section id={project.id} className="flex flex-col gap-8 scroll-mt-6">
+    <section id={project.id} className="group/board flex flex-col gap-10 scroll-mt-6">
       <ProjectHeader project={project} cardCount={cardCount} onRename={onRename} />
-      <div className="flex min-h-0 gap-4 overflow-x-auto">
+      <div className="flex min-h-0 gap-6 overflow-x-auto">
         {board.columns.map((column) => (
           <Column
             key={column.id}
