@@ -25,6 +25,7 @@ func NewStore() *Store {
 
 func (s *Store) Create(projectID, title string) Card {
 	id := newID()
+	now := time.Now().Unix()
 	c := Card{
 		ID:                 id,
 		ProjectID:          projectID,
@@ -32,7 +33,9 @@ func (s *Store) Create(projectID, title string) Card {
 		Column:             ColumnBacklog,
 		AcceptanceCriteria: []string{},
 		RelevantFiles:      []string{},
-		CreatedAt:          time.Now().Unix(),
+		Labels:             []string{},
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	s.mu.Lock()
 	s.cards[id] = c
