@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronsRight } from "lucide-react";
 import type { Card, Message, Model } from "../../shared/types/domain";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -7,6 +7,12 @@ import type { ChatStreamState } from "../chat";
 import { CardContent } from "./CardContent";
 import { Dialog } from "@/components/ui/dialog";
 import type { PreviewMode } from "../settings";
+import {
+  requestSidePeek,
+  releaseSidePeek,
+} from "../../shared/ui/side-peek-coordinator";
+
+const SIDE_PEEK_OWNER_ID = "card";
 
 interface CardModalProps {
   card: Card;
@@ -51,6 +57,21 @@ export function CardModal({
   previewMode = "modal",
 }: CardModalProps) {
   const isSidePeek = previewMode === "side-peek";
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isSidePeek) return;
+    const granted = requestSidePeek(SIDE_PEEK_OWNER_ID, () => {
+      onCloseRef.current();
+      return true;
+    });
+    if (!granted) {
+      onCloseRef.current();
+      return;
+    }
+    return () => releaseSidePeek(SIDE_PEEK_OWNER_ID);
+  }, [isSidePeek]);
 
   useEffect(() => {
     if (!isSidePeek) return;

@@ -7,6 +7,12 @@ import { SkillEditor } from "./SkillEditor";
 import { NewSkillDialog } from "./NewSkillDialog";
 import { DeleteSkillConfirm } from "./DeleteSkillConfirm";
 import { useSettings } from "../settings";
+import {
+  requestSidePeek,
+  releaseSidePeek,
+} from "../../shared/ui/side-peek-coordinator";
+
+const SIDE_PEEK_OWNER_ID = "skills";
 
 interface Props {
   open: boolean;
@@ -24,6 +30,7 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
 
   const isSidePeek = settings.previewMode === "side-peek";
   const attemptCloseRef = useRef<() => void>(() => {});
+  const releaseRef = useRef<() => boolean>(() => true);
 
   const counts = useMemo(() => {
     let skill = 0;
@@ -44,6 +51,12 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, [open, isSidePeek]);
+
+  useEffect(() => {
+    if (!open || !isSidePeek) return;
+    requestSidePeek(SIDE_PEEK_OWNER_ID, () => releaseRef.current());
+    return () => releaseSidePeek(SIDE_PEEK_OWNER_ID);
   }, [open, isSidePeek]);
 
   useEffect(() => {
@@ -70,6 +83,13 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
     onClose();
   };
   attemptCloseRef.current = attemptClose;
+  releaseRef.current = () => {
+    if (skills.isDirty && !window.confirm("You have unsaved changes. Close anyway?")) {
+      return false;
+    }
+    onClose();
+    return true;
+  };
 
   const attemptKindSwitch = (next: SkillKind) => {
     if (next === kind) return;

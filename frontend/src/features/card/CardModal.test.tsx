@@ -1,9 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardModal } from "./CardModal";
 import type { Card, Message, Model } from "../../shared/types/domain";
 import { initialChatStreamState } from "../chat";
+import {
+  requestSidePeek,
+  __resetSidePeekForTests,
+} from "../../shared/ui/side-peek-coordinator";
+
+beforeEach(() => __resetSidePeekForTests());
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -226,6 +232,29 @@ describe("CardModal", () => {
     // Verify the non-side-peek path does not attach our custom listener by asserting
     // clicking the modal content itself does not call onClose.
     await userEvent.click(screen.getByDisplayValue("Implement auth flow"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("side-peek registers with side-peek coordinator and closes when displaced", async () => {
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    const granted = requestSidePeek("other", () => true);
+    expect(granted).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("side-peek closes itself when coordinator denies the request", async () => {
+    requestSidePeek("blocker", () => false);
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("modal mode does not register with side-peek coordinator", async () => {
+    const onClose = vi.fn();
+    renderModal({ onClose });
+    const granted = requestSidePeek("other", () => false);
+    expect(granted).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
   });
 

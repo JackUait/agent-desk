@@ -4,10 +4,15 @@ import { SkillsDialog } from "./SkillsDialog";
 import { skillsApi } from "./skills-api";
 import { SETTINGS_STORAGE_KEY } from "../settings";
 import { __resetSettingsForTests } from "../settings/use-settings";
+import {
+  requestSidePeek,
+  __resetSidePeekForTests,
+} from "../../shared/ui/side-peek-coordinator";
 
 beforeEach(() => {
   window.localStorage.clear();
   __resetSettingsForTests();
+  __resetSidePeekForTests();
 });
 
 vi.mock("./SkillMarkdownEditor", () => ({
@@ -172,6 +177,75 @@ describe("SkillsDialog", () => {
     // outside-area is behind the modal backdrop — simulate a direct click anyway
     fireEvent.click(screen.getByTestId("outside-area"));
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("side-peek: releases ownership when another peek requests open (clean state)", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({ items: [] });
+    const onClose = vi.fn();
+    render(<SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />);
+    await screen.findByTestId("skills-preview-root");
+    const granted = requestSidePeek("card", () => true);
+    expect(granted).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("side-peek: dirty state denies another peek when user dismisses confirm", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({
+      items: [
+        { id: "1", kind: "skill", name: "alpha", description: "", source: "user", readOnly: false, path: "/a/SKILL.md" },
+      ],
+    });
+    mocked.readContent.mockResolvedValue({ path: "/a/SKILL.md", body: "hi", frontmatter: {} });
+    const onClose = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("alpha"));
+    await waitFor(() => expect(screen.getByLabelText("body")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("body"), { target: { value: "changed" } });
+
+    const granted = requestSidePeek("card", () => true);
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(granted).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("side-peek: dirty state allows another peek when user confirms discard", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({
+      items: [
+        { id: "1", kind: "skill", name: "alpha", description: "", source: "user", readOnly: false, path: "/a/SKILL.md" },
+      ],
+    });
+    mocked.readContent.mockResolvedValue({ path: "/a/SKILL.md", body: "hi", frontmatter: {} });
+    const onClose = vi.fn();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("alpha"));
+    await waitFor(() => expect(screen.getByLabelText("body")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("body"), { target: { value: "changed" } });
+
+    const granted = requestSidePeek("card", () => true);
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(granted).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
   });
 
   it("dirty-close shows confirm", async () => {
