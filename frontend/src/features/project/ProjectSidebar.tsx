@@ -48,8 +48,9 @@ export function ProjectSidebar({ projects, activeId, onNewProject, onSelect }: P
               <button
                 type="button"
                 aria-label={`skills for ${p.title}`}
+                data-active={active ? "true" : "false"}
                 onClick={() => setSkillsForProjectId(p.id)}
-                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-bg-hover hover:text-text-primary group-hover:opacity-100"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-text-muted opacity-0 transition hover:bg-bg-hover hover:text-text-primary group-hover:opacity-100 data-[active=true]:opacity-100"
               >
                 <BookOpenIcon width={12} height={12} />
               </button>

@@ -62,4 +62,23 @@ describe("ProjectSidebar skills button", () => {
     fireEvent.click(screen.getByRole("button", { name: /skills for one/i }));
     expect(screen.getByTestId("dialog-p1")).toBeInTheDocument();
   });
+
+  it("keeps skills button visible for the active project", () => {
+    render(
+      <ProjectSidebar
+        projects={[
+          { id: "p1", title: "One", path: "/p1", colorIdx: 0, createdAt: 0 },
+          { id: "p2", title: "Two", path: "/p2", colorIdx: 1, createdAt: 0 },
+        ]}
+        activeId="p1"
+        onNewProject={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    const activeBtn = screen.getByRole("button", { name: /skills for one/i });
+    const inactiveBtn = screen.getByRole("button", { name: /skills for two/i });
+    expect(activeBtn.className).toContain("data-[active=true]:opacity-100");
+    expect(activeBtn.getAttribute("data-active")).toBe("true");
+    expect(inactiveBtn.getAttribute("data-active")).toBe("false");
+  });
 });
