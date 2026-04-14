@@ -3,18 +3,32 @@ package card
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
 )
 
+type source int
+
+const (
+	sourceUser  source = iota
+	sourceAgent source = iota
+)
+
 type Service struct {
 	store *Store
+
+	dirtyMu sync.Mutex
+	dirty   map[string]map[string]struct{} // cardID -> flagSet
 }
 
 func NewService(store *Store) *Service {
-	return &Service{store: store}
+	return &Service{
+		store: store,
+		dirty: make(map[string]map[string]struct{}),
+	}
 }
 
 func (s *Service) CreateCard(projectID, title string) Card {
@@ -45,8 +59,20 @@ func (s *Service) DeleteCard(id string) error {
 }
 
 // UpdateFields applies a partial update to allowed string and slice fields.
-// Stamps UpdatedAt on any successful change.
+// Stamps UpdatedAt on any successful change. Marks title/description dirty
+// so user edits can be detected downstream.
 func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
+	return s.updateFieldsWithSource(id, fields, sourceUser)
+}
+
+// UpdateFieldsFromAgent is the same as UpdateFields but does not mark
+// the card dirty. Called by MCP handlers so agent self-edits don't feed
+// back into the dirty stream.
+func (s *Service) UpdateFieldsFromAgent(id string, fields map[string]any) (Card, error) {
+	return s.updateFieldsWithSource(id, fields, sourceAgent)
+}
+
+func (s *Service) updateFieldsWithSource(id string, fields map[string]any, src source) (Card, error) {
 	c, err := s.GetCard(id)
 	if err != nil {
 		return Card{}, err
@@ -56,10 +82,16 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 		case "title":
 			if str, ok := v.(string); ok {
 				c.Title = str
+				if src == sourceUser {
+					s.MarkDirty(id, "title")
+				}
 			}
 		case "description":
 			if str, ok := v.(string); ok {
 				c.Description = str
+				if src == sourceUser {
+					s.MarkDirty(id, "description")
+				}
 			}
 		case "complexity":
 			if str, ok := v.(string); ok {
@@ -81,6 +113,37 @@ func (s *Service) UpdateFields(id string, fields map[string]any) (Card, error) {
 	}
 	s.touch(&c)
 	return c, nil
+}
+
+// MarkDirty records that the user mutated `flag` on `id`. Safe to call multiple
+// times; later calls are idempotent per flag.
+func (s *Service) MarkDirty(id, flag string) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	set, ok := s.dirty[id]
+	if !ok {
+		set = make(map[string]struct{})
+		s.dirty[id] = set
+	}
+	set[flag] = struct{}{}
+}
+
+// DrainDirty returns the current flag set for id and clears it.
+// The second return value is reserved for an attachment diff and is empty
+// for now; it will be populated in a later task.
+func (s *Service) DrainDirty(id string) ([]string, any) {
+	s.dirtyMu.Lock()
+	defer s.dirtyMu.Unlock()
+	set := s.dirty[id]
+	if len(set) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	delete(s.dirty, id)
+	return out, nil
 }
 
 // AddAcceptanceCriterion appends text to the acceptance-criteria list.
