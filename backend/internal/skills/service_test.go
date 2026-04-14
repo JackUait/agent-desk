@@ -64,3 +64,39 @@ func TestServiceListPlugin(t *testing.T) {
 		t.Errorf("unexpected plugin item: %+v", it)
 	}
 }
+
+func TestServiceReadWriteContent(t *testing.T) {
+	tmp := t.TempDir()
+	skillsRoot := filepath.Join(tmp, "skills")
+	writeFile(t, filepath.Join(skillsRoot, "alpha", "SKILL.md"),
+		"---\nname: alpha\ndescription: one\n---\nbody one")
+
+	svc := NewService(Roots{Writable: []string{skillsRoot}})
+	path := filepath.Join(skillsRoot, "alpha", "SKILL.md")
+
+	c, err := svc.ReadContent(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Frontmatter["name"] != "alpha" || c.Body != "body one" {
+		t.Errorf("unexpected content: %+v", c)
+	}
+
+	updated := "---\nname: alpha\ndescription: two\n---\nbody two"
+	c2, err := svc.WriteContent(path, updated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Frontmatter["description"] != "two" || c2.Body != "body two" {
+		t.Errorf("unexpected write result: %+v", c2)
+	}
+
+	raw, _ := os.ReadFile(path)
+	if string(raw) != updated {
+		t.Errorf("file not updated: %q", string(raw))
+	}
+
+	if _, err := svc.WriteContent(filepath.Join(tmp, "evil.md"), "x"); err == nil {
+		t.Error("expected rejection for write outside writable roots")
+	}
+}

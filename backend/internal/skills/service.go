@@ -134,3 +134,28 @@ func loadItem(full string, kind ItemKind, source ItemSource, pluginName string) 
 		Path:        filePath,
 	}, true, nil
 }
+
+func (s *Service) ReadContent(path string) (Content, error) {
+	resolved, err := ResolveReadable(path, s.roots)
+	if err != nil {
+		return Content{}, err
+	}
+	data, err := os.ReadFile(resolved)
+	if err != nil {
+		return Content{}, err
+	}
+	fm, body := SplitFrontmatter(string(data))
+	return Content{Path: resolved, Body: body, Frontmatter: fm}, nil
+}
+
+func (s *Service) WriteContent(path, content string) (Content, error) {
+	resolved, err := ResolveWritable(path, s.roots)
+	if err != nil {
+		return Content{}, err
+	}
+	if err := os.WriteFile(resolved, []byte(content), 0o644); err != nil {
+		return Content{}, err
+	}
+	fm, body := SplitFrontmatter(content)
+	return Content{Path: resolved, Body: body, Frontmatter: fm}, nil
+}
