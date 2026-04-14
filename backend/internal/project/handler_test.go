@@ -146,6 +146,23 @@ func TestHandler_RenameProject_404(t *testing.T) {
 	}
 }
 
+func TestHandler_RenameProject_400OnEmptyTitle(t *testing.T) {
+	store := project.NewStore(&project.StubGit{IsRepoVal: true})
+	h := project.NewHandler(store, fakePicker{}, noopCascade{})
+	p, _ := store.Create("/tmp/x")
+	req := httptest.NewRequest("PATCH", "/api/projects/"+p.ID, bytes.NewBufferString(`{"title":""}`))
+	req.SetPathValue("id", p.ID)
+	rec := httptest.NewRecorder()
+	h.RenameProject(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rec.Code)
+	}
+	got, _ := store.Get(p.ID)
+	if got.Title == "" {
+		t.Error("title should not have been overwritten")
+	}
+}
+
 func TestHandler_DeleteProject_CascadesAndReturns204(t *testing.T) {
 	cascade := &recordingCascade{}
 	h, store := newTestHandler(fakePicker{}, cascade)

@@ -64,6 +64,10 @@ func (h *Handler) RenameProject(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if body.Title == "" {
+		httputil.Error(w, http.StatusBadRequest, "title is required")
+		return
+	}
 	if !h.store.UpdateTitle(id, body.Title) {
 		httputil.Error(w, http.StatusNotFound, "project not found")
 		return
