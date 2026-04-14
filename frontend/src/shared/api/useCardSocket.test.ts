@@ -211,6 +211,127 @@ describe("useCardSocket", () => {
     expect(sent).toEqual({ type: "start" });
   });
 
+  it("queues a second sendMessage while a turn is in flight and flushes it on turn_end", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+
+    act(() => {
+      result.current.sendMessage("first");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+
+    // Second message arrives mid-turn — must NOT hit the wire yet.
+    act(() => {
+      result.current.sendMessage("second");
+    });
+    expect(getInstance().sent).toHaveLength(1);
+    // But the user message appears locally right away.
+    expect(result.current.userMessages.map((m) => m.content)).toEqual([
+      "first",
+      "second",
+    ]);
+
+    // Turn ends — queued message must now be sent.
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+    const flushed = JSON.parse(getInstance().sent[1]);
+    expect(flushed).toMatchObject({ type: "message", content: "second" });
+  });
+
+  it("queues multiple mid-turn messages and flushes them across turn boundaries", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+
+    act(() => {
+      result.current.sendMessage("a");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+    act(() => {
+      result.current.sendMessage("b");
+      result.current.sendMessage("c");
+    });
+    expect(getInstance().sent).toHaveLength(1);
+
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+    expect(JSON.parse(getInstance().sent[1])).toMatchObject({ content: "b" });
+
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s2" });
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(3);
+    expect(JSON.parse(getInstance().sent[2])).toMatchObject({ content: "c" });
+  });
+
+  it("clears the queued messages when sendAction('stop') is invoked", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendMessage("first");
+    });
+    act(() => {
+      getInstance().simulateMessage({ type: "turn_start", sessionId: "s1" });
+    });
+    act(() => {
+      result.current.sendMessage("queued");
+    });
+    act(() => {
+      result.current.sendAction("stop");
+    });
+    // Flush frame for stop hit the wire.
+    const stopFrame = JSON.parse(getInstance().sent[1]);
+    expect(stopFrame).toEqual({ type: "stop" });
+
+    // After turn ends, the queued message must NOT be sent.
+    act(() => {
+      getInstance().simulateMessage({
+        type: "turn_end",
+        durationMs: 0,
+        costUsd: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        stopReason: "end_turn",
+      });
+    });
+    expect(getInstance().sent).toHaveLength(2);
+  });
+
   it("sendAction('stop') sends a stop frame", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {

@@ -241,23 +241,24 @@ export function ChatPanel({
               onChange={setSelection}
               disabled={readOnly || chatStream.turnInFlight}
             />
-            {chatStream.turnInFlight ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                data-testid="stop-button"
-                onClick={() => onStop?.()}
-                disabled={readOnly || !onStop}
-                aria-label="Stop agent"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-2 rounded-[1px] bg-current"
-                />
-                Stop
-              </Button>
-            ) : (
+            <div className="flex items-center gap-1.5">
+              {chatStream.turnInFlight && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  data-testid="stop-button"
+                  onClick={() => onStop?.()}
+                  disabled={!onStop}
+                  aria-label="Stop agent"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-2 rounded-[1px] bg-current"
+                  />
+                  Stop
+                </Button>
+              )}
               <Button
                 type="submit"
                 size="sm"
@@ -266,7 +267,7 @@ export function ChatPanel({
               >
                 Send
               </Button>
-            )}
+            </div>
           </div>
         </div>
       </form>

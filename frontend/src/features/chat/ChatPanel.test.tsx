@@ -258,37 +258,41 @@ describe("ChatPanel send flow", () => {
 });
 
 describe("ChatPanel stop button", () => {
-  it("replaces Send with Stop while turnInFlight", () => {
+  it("shows Send and Stop side-by-side while turnInFlight", () => {
     renderPanel({
       chatStream: { ...EMPTY_STREAM, turnInFlight: true },
       onStop: vi.fn(),
     });
+    expect(screen.getByTestId("send-button")).toBeInTheDocument();
     expect(screen.getByTestId("stop-button")).toBeInTheDocument();
-    expect(screen.queryByTestId("send-button")).not.toBeInTheDocument();
+  });
+
+  it("keeps the Send button enabled so queued messages can be submitted mid-turn", async () => {
+    const user = userEvent.setup();
+    const { onSend } = renderPanel({
+      chatStream: { ...EMPTY_STREAM, turnInFlight: true },
+      onStop: vi.fn(),
+      cardModel: "claude-haiku-4-5",
+      cardEffort: "low",
+    });
+    await user.type(screen.getByLabelText("Message input"), "queued");
+    await user.click(screen.getByTestId("send-button"));
+    expect(onSend).toHaveBeenCalledWith("queued", "claude-haiku-4-5", "low");
   });
 
   it("calls onStop when the Stop button is clicked", async () => {
     const user = userEvent.setup();
     const onStop = vi.fn();
-    renderPanel({
+    const { onSend } = renderPanel({
       chatStream: { ...EMPTY_STREAM, turnInFlight: true },
       onStop,
     });
     await user.click(screen.getByTestId("stop-button"));
     expect(onStop).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not call onSend when Stop is clicked", async () => {
-    const user = userEvent.setup();
-    const { onSend } = renderPanel({
-      chatStream: { ...EMPTY_STREAM, turnInFlight: true },
-      onStop: vi.fn(),
-    });
-    await user.click(screen.getByTestId("stop-button"));
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("shows Send (not Stop) when turnInFlight is false", () => {
+  it("hides the Stop button when turnInFlight is false", () => {
     renderPanel({ chatStream: EMPTY_STREAM, onStop: vi.fn() });
     expect(screen.getByTestId("send-button")).toBeInTheDocument();
     expect(screen.queryByTestId("stop-button")).not.toBeInTheDocument();
