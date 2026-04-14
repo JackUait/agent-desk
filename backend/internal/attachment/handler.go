@@ -7,13 +7,25 @@ import (
 	"net/http"
 )
 
+// DirtyRecorder is the subset of card.Service the handler needs to notify when
+// attachments change so the next agent turn is told about the new state.
+type DirtyRecorder interface {
+	RecordAttachmentAdded(cardID, name string)
+	RecordAttachmentRemoved(cardID, name string)
+}
+
 // Handler exposes attachment routes.
 type Handler struct {
-	svc *Service
+	svc      *Service
+	recorder DirtyRecorder
 }
 
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+func NewHandlerWithRecorder(svc *Service, rec DirtyRecorder) *Handler {
+	return &Handler{svc: svc, recorder: rec}
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -53,6 +65,9 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, statusFor(upErr), upErr.Error())
 			return
 		}
+		if h.recorder != nil {
+			h.recorder.RecordAttachmentAdded(cardID, a.Name)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(a)
@@ -91,6 +106,9 @@ func (h *Handler) remove(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(cardID, name); err != nil {
 		writeErr(w, statusFor(err), err.Error())
 		return
+	}
+	if h.recorder != nil {
+		h.recorder.RecordAttachmentRemoved(cardID, name)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -124,3 +124,58 @@ func TestHandlerRejectsTraversal(t *testing.T) {
 		t.Fatalf("status = %d, want 400", rr.Code)
 	}
 }
+
+type fakeDirtyRecorder struct {
+	addedCalls   []string
+	removedCalls []string
+}
+
+func (f *fakeDirtyRecorder) RecordAttachmentAdded(cardID, name string) {
+	f.addedCalls = append(f.addedCalls, cardID+":"+name)
+}
+func (f *fakeDirtyRecorder) RecordAttachmentRemoved(cardID, name string) {
+	f.removedCalls = append(f.removedCalls, cardID+":"+name)
+}
+
+func TestHandlerRecordsDirtyOnUpload(t *testing.T) {
+	svc := NewService(NewStore(t.TempDir()), func() int64 { return 1 })
+	rec := &fakeDirtyRecorder{}
+	h := NewHandlerWithRecorder(svc, rec)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, ct := multipartUpload(t, "a.txt", "x")
+	req := httptest.NewRequest("POST", "/api/cards/c1/attachments", body)
+	req.Header.Set("Content-Type", ct)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("upload status %d", rr.Code)
+	}
+	if len(rec.addedCalls) != 1 || rec.addedCalls[0] != "c1:a.txt" {
+		t.Fatalf("unexpected calls %+v", rec.addedCalls)
+	}
+}
+
+func TestHandlerRecordsDirtyOnDelete(t *testing.T) {
+	svc := NewService(NewStore(t.TempDir()), func() int64 { return 1 })
+	rec := &fakeDirtyRecorder{}
+	h := NewHandlerWithRecorder(svc, rec)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	body, ct := multipartUpload(t, "a.txt", "x")
+	up := httptest.NewRequest("POST", "/api/cards/c1/attachments", body)
+	up.Header.Set("Content-Type", ct)
+	mux.ServeHTTP(httptest.NewRecorder(), up)
+
+	del := httptest.NewRequest("DELETE", "/api/cards/c1/attachments/a.txt", nil)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, del)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("delete status %d", rr.Code)
+	}
+	if len(rec.removedCalls) != 1 || rec.removedCalls[0] != "c1:a.txt" {
+		t.Fatalf("unexpected calls %+v", rec.removedCalls)
+	}
+}
