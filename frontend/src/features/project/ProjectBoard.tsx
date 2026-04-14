@@ -22,16 +22,7 @@ export function ProjectBoard({
   const cardCount = Object.keys(cards).length;
   return (
     <section id={project.id} className="flex flex-col gap-8 scroll-mt-6">
-      <div className="flex items-center justify-between gap-4">
-        <ProjectHeader project={project} cardCount={cardCount} onRename={onRename} />
-        <button
-          type="button"
-          onClick={() => onNewCard(project.id)}
-          className="cursor-pointer rounded-md bg-accent-blue px-3.5 py-1.5 font-mono text-[12px] text-white transition hover:opacity-85"
-        >
-          + new card
-        </button>
-      </div>
+      <ProjectHeader project={project} cardCount={cardCount} onRename={onRename} />
       <div className="flex min-h-0 gap-4 overflow-x-auto">
         {board.columns.map((column) => (
           <Column

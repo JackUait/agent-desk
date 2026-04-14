@@ -125,7 +125,7 @@ describe("ProjectsPage", () => {
 
     await waitFor(() => expect(screen.getAllByText("alpha").length).toBeGreaterThan(0));
 
-    await user.click(screen.getByRole("button", { name: /\+ new card/i }));
+    await user.click(screen.getByRole("button", { name: /add a card/i }));
 
     await waitFor(() => {
       expect(screen.getByTestId("modal-overlay")).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe("ProjectsPage", () => {
 
     await waitFor(() => expect(screen.getAllByText("alpha").length).toBeGreaterThan(0));
 
-    await user.click(screen.getByRole("button", { name: /\+ new card/i }));
+    await user.click(screen.getByRole("button", { name: /add a card/i }));
 
     expect(screen.queryByTestId("modal-overlay")).not.toBeInTheDocument();
   });

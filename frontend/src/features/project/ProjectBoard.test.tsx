@@ -68,22 +68,6 @@ describe("ProjectBoard", () => {
     expect(screen.getByText("Done")).toBeDefined();
   });
 
-  it("fires onNewCard with the project id", () => {
-    const onNewCard = vi.fn();
-    render(
-      <ProjectBoard
-        project={project}
-        board={board}
-        cards={cards}
-        onNewCard={onNewCard}
-        onRename={vi.fn()}
-        onCardClick={vi.fn()}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: /new card/i }));
-    expect(onNewCard).toHaveBeenCalledWith("p1");
-  });
-
   it("fires onNewCard with 'top' when the backlog top + button is clicked", () => {
     const onNewCard = vi.fn();
     render(
