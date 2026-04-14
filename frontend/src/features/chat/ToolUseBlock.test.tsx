@@ -71,28 +71,28 @@ describe("ToolUseBlock", () => {
 
 describe("ToolUseBlock agent-desk relabel", () => {
   it("renders semantic label instead of raw tool name for agent-desk tools", () => {
-    const block = {
-      kind: "tool_use" as const,
+    const block: Extract<ChatBlock, { kind: "tool_use" }> = {
+      kind: "tool_use",
+      index: 0,
       toolId: "x",
       toolName: "mcp__agent_desk__set_status",
       partialJson: JSON.stringify({ column: "review" }),
       done: true,
-      result: undefined,
     };
-    render(<ToolUseBlock block={block as any} />);
+    render(<ToolUseBlock block={block} />);
     expect(screen.getByText("Status → review")).toBeInTheDocument();
   });
 
   it("falls back to raw tool name for non-agent-desk tools", () => {
-    const block = {
-      kind: "tool_use" as const,
+    const block: Extract<ChatBlock, { kind: "tool_use" }> = {
+      kind: "tool_use",
+      index: 0,
       toolId: "x",
       toolName: "Bash",
       partialJson: JSON.stringify({ command: "ls" }),
       done: true,
-      result: undefined,
     };
-    render(<ToolUseBlock block={block as any} />);
+    render(<ToolUseBlock block={block} />);
     expect(screen.getByText("Bash")).toBeInTheDocument();
   });
 });

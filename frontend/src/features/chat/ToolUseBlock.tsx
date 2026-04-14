@@ -20,7 +20,7 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const status = statusFor(block);
 
-  let parsedArgs: Record<string, unknown> = {};
+  let parsedArgs: Record<string, unknown>;
   try {
     parsedArgs = block.partialJson ? JSON.parse(block.partialJson) : {};
   } catch {
