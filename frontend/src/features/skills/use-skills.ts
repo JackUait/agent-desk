@@ -40,6 +40,13 @@ export function useSkills(scope: SkillScope) {
     setDraftFrontmatter(c.frontmatter);
   }, [key]);
 
+  const clearSelection = useCallback(() => {
+    setSelected(null);
+    setLoadedContent(null);
+    setDraftBody("");
+    setDraftFrontmatter({});
+  }, []);
+
   const isDirty = useMemo(() => {
     if (!loadedContent) return false;
     if (draftBody !== loadedContent.body) return true;
@@ -102,6 +109,7 @@ export function useSkills(scope: SkillScope) {
     isDirty,
     refresh,
     select,
+    clearSelection,
     setDraftBody,
     setDraftFrontmatter,
     save,

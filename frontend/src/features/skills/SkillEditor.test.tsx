@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { useState } from "react";
 import { SkillEditor } from "./SkillEditor";
 import type { SkillItem } from "./types";
 
@@ -45,6 +46,35 @@ describe("SkillEditor", () => {
       />,
     );
     expect(screen.getByRole("button", { name: /save/i })).toBeDisabled();
+  });
+
+  it("undo (cmd+z) restores previous body; redo (cmd+shift+z) reapplies", () => {
+    function Wrapper() {
+      const [body, setBody] = useState("one");
+      return (
+        <SkillEditor
+          item={item}
+          frontmatter={{ name: "alpha" }}
+          onFrontmatterChange={() => {}}
+          body={body}
+          onBodyChange={setBody}
+          isDirty={false}
+          onSave={() => {}}
+          onRevert={() => {}}
+          onDelete={() => {}}
+        />
+      );
+    }
+    render(<Wrapper />);
+    // Switch to raw mode so the undo handler is active.
+    fireEvent.click(screen.getByRole("tab", { name: /show raw markdown/i }));
+    const textarea = screen.getByLabelText("body") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "two" } });
+    expect(textarea.value).toBe("two");
+    fireEvent.keyDown(textarea, { key: "z", metaKey: true });
+    expect((screen.getByLabelText("body") as HTMLTextAreaElement).value).toBe("one");
+    fireEvent.keyDown(textarea, { key: "z", metaKey: true, shiftKey: true });
+    expect((screen.getByLabelText("body") as HTMLTextAreaElement).value).toBe("two");
   });
 
   it("plugin item hides delete and shows read-only banner", () => {

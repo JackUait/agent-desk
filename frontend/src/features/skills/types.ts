@@ -20,7 +20,7 @@ export interface SkillContent {
 
 export type SkillScope =
   | { kind: "global" }
-  | { kind: "project"; projectId: string };
+  | { kind: "project"; projectId: string; projectName?: string };
 
 export function scopeQuery(scope: SkillScope): string {
   if (scope.kind === "global") return "scope=global";

@@ -1,89 +1,81 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Editor, rootCtx, defaultValueCtx, editorViewOptionsCtx } from "@milkdown/core";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  Editor,
+  rootCtx,
+  defaultValueCtx,
+  editorViewOptionsCtx,
+  prosePluginsCtx,
+} from "@milkdown/core";
 import { nord } from "@milkdown/theme-nord";
 import "@milkdown/theme-nord/style.css";
 import { commonmark } from "@milkdown/preset-commonmark";
 import { gfm } from "@milkdown/preset-gfm";
 import { listener, listenerCtx } from "@milkdown/plugin-listener";
+import { history, undo, redo } from "@milkdown/prose/history";
+import { keymap } from "@milkdown/prose/keymap";
+import { highlightMarkdown } from "./highlight-markdown";
 
-interface Props {
+interface EditorProps {
   value: string;
   onChange: (next: string) => void;
   readOnly: boolean;
 }
 
-export function SkillMarkdownEditor({ value, onChange, readOnly }: Props) {
-  const [raw, setRaw] = useState(false);
+interface Props extends EditorProps {
+  raw: boolean;
+}
 
-  const stats = useMemo(() => {
-    const trimmed = value.trim();
-    if (!trimmed) return { words: 0, lines: 0 };
-    return {
-      words: trimmed.split(/\s+/).length,
-      lines: value.split("\n").length,
-    };
-  }, [value]);
-
+export function SkillMarkdownEditor({ value, onChange, readOnly, raw }: Props) {
   const isEmpty = value.trim().length === 0;
+  const rawRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (!raw) return;
+    const el = rawRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [raw, value]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-border-hairline px-6 py-2">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted">
-            Body
-          </span>
-          <span className="font-mono text-[10px] tabular-nums text-text-muted/80">
-            {stats.words} {stats.words === 1 ? "word" : "words"} · {stats.lines}{" "}
-            {stats.lines === 1 ? "line" : "lines"}
-          </span>
-        </div>
-        <div className="flex items-center gap-0.5 rounded-md border border-border-card bg-bg-surface/60 p-0.5">
-          <button
-            type="button"
-            onClick={() => setRaw(false)}
-            data-active={!raw}
-            className="rounded-[4px] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted transition data-[active=true]:bg-bg-card data-[active=true]:text-text-primary data-[active=true]:shadow-sm"
+    <div className="relative min-w-0 bg-bg-card">
+      {raw ? (
+        <div className="relative">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 whitespace-pre-wrap break-words px-10 py-4 font-mono text-[13px] leading-[1.6] text-text-secondary"
           >
-            Rendered
-          </button>
-          <button
-            type="button"
-            onClick={() => setRaw(true)}
-            data-active={raw}
-            className="rounded-[4px] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-text-muted transition data-[active=true]:bg-bg-card data-[active=true]:text-text-primary data-[active=true]:shadow-sm"
-          >
-            Raw
-          </button>
-        </div>
-      </div>
-      <div className="relative min-w-0 flex-1 overflow-auto bg-bg-card">
-        {raw ? (
+            {highlightMarkdown(value)}
+            {"\u200B"}
+          </div>
           <textarea
+            ref={rawRef}
             aria-label="raw markdown"
             value={value}
             readOnly={readOnly}
             disabled={readOnly}
             onChange={(e) => onChange(e.target.value)}
             placeholder="# Your skill body&#10;&#10;Write the instructions the agent should follow…"
-            className="h-full w-full resize-none bg-bg-card px-6 py-5 font-mono text-[13px] leading-[1.6] text-text-primary outline-none placeholder:text-text-muted/70"
+            spellCheck={false}
+            style={{ caretColor: "var(--color-text-primary)" }}
+            className="relative block w-full resize-none overflow-hidden whitespace-pre-wrap break-words bg-transparent px-10 py-4 font-mono text-[13px] leading-[1.6] text-transparent outline-none selection:bg-accent-blue/25 placeholder:text-text-muted/60"
           />
-        ) : (
-          <>
-            <MilkdownView value={value} onChange={onChange} readOnly={readOnly} />
-            {isEmpty && !readOnly && (
-              <div className="pointer-events-none absolute left-0 right-0 top-0 px-6 py-5 text-[14px] text-text-muted/70">
-                Start writing your skill — markdown supported.
-              </div>
-            )}
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          <MilkdownView value={value} onChange={onChange} readOnly={readOnly} />
+          {isEmpty && !readOnly && (
+            <div className="pointer-events-none absolute left-0 right-0 top-0 px-10 py-4 text-[14px] text-text-muted/60">
+              Write your skill body…
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
-function MilkdownView({ value, onChange, readOnly }: Props) {
+function MilkdownView({ value, onChange, readOnly }: EditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const latestValue = useRef(value);
   const onChangeRef = useRef(onChange);
@@ -108,6 +100,15 @@ function MilkdownView({ value, onChange, readOnly }: Props) {
         ctx.set(rootCtx, host);
         ctx.set(defaultValueCtx, latestValue.current);
         ctx.set(editorViewOptionsCtx, { editable: () => !readOnly });
+        ctx.update(prosePluginsCtx, (prev) => [
+          ...prev,
+          history(),
+          keymap({
+            "Mod-z": undo,
+            "Mod-y": redo,
+            "Shift-Mod-z": redo,
+          }),
+        ]);
         ctx.get(listenerCtx).markdownUpdated((_, md) => {
           if (md !== latestValue.current) {
             latestValue.current = md;
@@ -128,5 +129,5 @@ function MilkdownView({ value, onChange, readOnly }: Props) {
     };
   }, [readOnly, epoch]);
 
-  return <div ref={hostRef} className="milkdown-host px-6 py-5" />;
+  return <div ref={hostRef} className="milkdown-host px-10 py-4" />;
 }

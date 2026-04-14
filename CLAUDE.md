@@ -35,6 +35,10 @@ Before considering any task done:
 - [ ] Linting clean: `cd frontend && yarn lint`
 - [ ] Changes committed with descriptive message
 
+## Design Principle — Notion-like Simplicity
+
+UI should look simple on the surface and reveal complexity only when needed. Strip labels and chrome that restate obvious structure (no loud "FRONTMATTER" / "BODY" banners). Hide secondary controls (raw toggle, delete, stats, breadcrumbs) in muted corners, hover states, or menus. Primary actions (Save) become prominent only when relevant (dirty state). Prefer generous whitespace and one visual focus per view over dense control strips. When a feature requires complexity, surface it progressively — not upfront.
+
 ## Frontend Conventions
 
 - Test files colocated: `Component.test.tsx` next to `Component.tsx`

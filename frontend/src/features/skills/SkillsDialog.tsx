@@ -72,11 +72,14 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
   attemptCloseRef.current = attemptClose;
 
   const attemptKindSwitch = (next: SkillKind) => {
+    if (next === kind) return;
     if (skills.isDirty && !window.confirm("Discard unsaved changes?")) return;
     setKind(next);
+    skills.clearSelection();
   };
 
-  const scopeLabel = scope.kind === "global" ? "Global" : "Project";
+  const scopeLabel =
+    scope.kind === "global" ? "Global" : scope.projectName ?? "Project";
 
   const panel = (
     <div
@@ -84,52 +87,46 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
       data-preview-mode={settings.previewMode}
       className={panelClass}
     >
-        <div className="flex items-center justify-between gap-4 border-b border-border-card bg-bg-surface/40 px-4 py-2.5">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-border-card bg-bg-card px-2 py-[3px] font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent-blue" />
+        <div className="flex items-center justify-between gap-4 border-b border-border-hairline px-4 py-2">
+          <div className="flex items-center gap-4">
+            <span
+              className="max-w-[180px] truncate text-[12px] font-medium text-text-secondary"
+              title={scopeLabel}
+            >
               {scopeLabel}
             </span>
-            <div
-              role="tablist"
-              className="flex items-center gap-0.5 rounded-md border border-border-card bg-bg-surface/60 p-0.5"
-            >
+            <div role="tablist" className="flex items-center gap-1">
               <button
                 role="tab"
                 aria-selected={kind === "skill"}
                 onClick={() => attemptKindSwitch("skill")}
                 data-active={kind === "skill"}
-                className="group inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[12px] font-medium text-text-secondary transition data-[active=true]:bg-bg-card data-[active=true]:text-text-primary data-[active=true]:shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-text-muted transition hover:text-text-primary data-[active=true]:text-text-primary"
               >
                 <Sparkles width={12} height={12} className="opacity-70" />
                 Skills
-                <span className="font-mono text-[10px] tabular-nums text-text-muted group-data-[active=true]:text-text-secondary">
-                  {counts.skill}
-                </span>
               </button>
               <button
                 role="tab"
                 aria-selected={kind === "command"}
                 onClick={() => attemptKindSwitch("command")}
                 data-active={kind === "command"}
-                className="group inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[12px] font-medium text-text-secondary transition data-[active=true]:bg-bg-card data-[active=true]:text-text-primary data-[active=true]:shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-text-muted transition hover:text-text-primary data-[active=true]:text-text-primary"
               >
                 <Terminal width={12} height={12} className="opacity-70" />
                 Commands
-                <span className="font-mono text-[10px] tabular-nums text-text-muted group-data-[active=true]:text-text-secondary">
-                  {counts.command}
-                </span>
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => setShowNew(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border-card bg-bg-card px-2.5 py-1 text-[12px] font-medium text-text-primary shadow-sm transition hover:border-border-strong hover:bg-bg-hover"
+              aria-label={`new ${kind}`}
+              title={`New ${kind}`}
+              className="rounded-md p-1.5 text-text-muted transition hover:bg-bg-hover hover:text-text-primary"
             >
-              <Plus width={12} height={12} />
-              New {kind === "skill" ? "skill" : "command"}
+              <Plus width={15} height={15} />
             </button>
             <button
               type="button"
@@ -234,72 +231,33 @@ interface EmptyPaneProps {
 function EmptyPane({ loading, total, kind, onCreate }: EmptyPaneProps) {
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-text-muted">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted" />
-          Loading
-        </div>
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="text-[12px] text-text-muted">Loading…</div>
       </div>
     );
   }
 
   const label = kind === "skill" ? "skill" : "command";
-  const Icon = kind === "skill" ? Sparkles : Terminal;
 
   if (total === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-10">
-        <div className="w-full max-w-[440px]">
-          <div className="rounded-xl border border-border-card bg-bg-elevated/60 p-6 shadow-sm">
-            <div className="mb-4 inline-flex items-center justify-center rounded-lg border border-border-card bg-bg-card p-2 shadow-sm">
-              <Icon width={16} height={16} className="text-text-primary" />
-            </div>
-            <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">
-              Create your first {label}
-            </h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-text-secondary">
-              {kind === "skill"
-                ? "Skills extend what your agents can do. Define a name, a description, and the instructions the agent should follow."
-                : "Commands are reusable prompts you can invoke with a slash. Give it a name and the body to run."}
-            </p>
-            <button
-              type="button"
-              onClick={onCreate}
-              className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-text-primary px-3 py-1.5 text-[12px] font-medium text-bg-page shadow-sm transition hover:opacity-90"
-            >
-              <Plus width={12} height={12} />
-              New {label}
-            </button>
-            <ul className="mt-5 space-y-1.5 border-t border-border-hairline pt-4 font-mono text-[11px] text-text-muted">
-              <li className="flex items-center gap-2">
-                <span className="text-text-secondary">01</span>
-                Pick a short, descriptive name
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-text-secondary">02</span>
-                Write a one-line description
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="text-text-secondary">03</span>
-                Drop in the markdown body
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
+        <div className="text-[13px] text-text-secondary">No {label}s yet</div>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] text-text-muted transition hover:text-text-primary"
+        >
+          <Plus width={12} height={12} />
+          New {label}
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-      <div className="inline-flex items-center justify-center rounded-md border border-border-card bg-bg-surface/60 p-2">
-        <Icon width={14} height={14} className="text-text-muted" />
-      </div>
-      <div className="text-[13px] text-text-secondary">Select a {label} to edit</div>
-      <div className="font-mono text-[10px] uppercase tracking-wide text-text-muted">
-        {total} {label}
-        {total === 1 ? "" : "s"} available
-      </div>
+    <div className="flex h-full w-full items-center justify-center">
+      <div className="text-[13px] text-text-muted">Select a {label}</div>
     </div>
   );
 }

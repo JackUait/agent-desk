@@ -123,7 +123,11 @@ export function ProjectSidebar({
       {skillsForProjectId && (
         <SkillsDialog
           open
-          scope={{ kind: "project", projectId: skillsForProjectId }}
+          scope={{
+            kind: "project",
+            projectId: skillsForProjectId,
+            projectName: projects.find((p) => p.id === skillsForProjectId)?.title,
+          }}
           onClose={() => setSkillsForProjectId(null)}
         />
       )}

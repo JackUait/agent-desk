@@ -18,21 +18,15 @@ export function FrontmatterForm({ value, onChange, readOnly }: Props) {
   }, [value.description]);
 
   return (
-    <div className="border-b border-border-card px-6 pt-5 pb-4">
-      <div className="flex items-center gap-1.5 pb-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted">
-          Frontmatter
-        </span>
-        <span className="h-px flex-1 bg-border-hairline" />
-      </div>
+    <div className="px-10 pt-10 pb-2">
       <input
         aria-label="name"
         value={value.name ?? ""}
         disabled={readOnly}
         onChange={(e) => update("name", e.target.value)}
-        placeholder="untitled-skill"
+        placeholder="Untitled"
         spellCheck={false}
-        className="w-full min-w-0 border-0 bg-transparent p-0 text-[20px] font-semibold tracking-tight text-text-primary outline-none placeholder:text-text-muted/70 disabled:opacity-70"
+        className="w-full min-w-0 border-0 bg-transparent p-0 text-[32px] font-bold tracking-tight text-text-primary outline-none placeholder:text-text-muted/60 disabled:opacity-70"
       />
       <textarea
         ref={descriptionRef}
@@ -40,9 +34,9 @@ export function FrontmatterForm({ value, onChange, readOnly }: Props) {
         value={value.description ?? ""}
         disabled={readOnly}
         onChange={(e) => update("description", e.target.value)}
-        placeholder="One line — when the agent should use this skill"
+        placeholder="Add a description…"
         rows={1}
-        className="mt-1 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-[13px] leading-relaxed text-text-secondary outline-none placeholder:text-text-muted/80 disabled:opacity-70"
+        className="mt-2 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 text-[14px] leading-relaxed text-text-secondary outline-none placeholder:text-text-muted/60 disabled:opacity-70"
       />
     </div>
   );
