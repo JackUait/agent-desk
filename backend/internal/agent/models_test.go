@@ -45,3 +45,31 @@ func TestIsAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestAllowedEfforts_ExactSetAndOrder(t *testing.T) {
+	want := []string{"low", "medium", "high", "max"}
+	if len(agent.AllowedEfforts) != len(want) {
+		t.Fatalf("AllowedEfforts length = %d, want %d: %v", len(agent.AllowedEfforts), len(want), agent.AllowedEfforts)
+	}
+	for i, e := range want {
+		if agent.AllowedEfforts[i] != e {
+			t.Errorf("AllowedEfforts[%d] = %q, want %q", i, agent.AllowedEfforts[i], e)
+		}
+	}
+}
+
+func TestIsAllowedEffort_AcceptsKnownValues(t *testing.T) {
+	for _, e := range []string{"low", "medium", "high", "max"} {
+		if !agent.IsAllowedEffort(e) {
+			t.Errorf("IsAllowedEffort(%q) = false, want true", e)
+		}
+	}
+}
+
+func TestIsAllowedEffort_RejectsUnknownAndEmpty(t *testing.T) {
+	for _, e := range []string{"", "LOW", "ultra", "MEDIUM", "fast"} {
+		if agent.IsAllowedEffort(e) {
+			t.Errorf("IsAllowedEffort(%q) = true, want false", e)
+		}
+	}
+}

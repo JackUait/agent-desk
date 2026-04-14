@@ -27,3 +27,21 @@ func IsAllowed(id string) bool {
 	}
 	return false
 }
+
+// AllowedEfforts is the hardcoded list of thinking effort levels the Claude
+// CLI accepts via its --effort flag. Order is user-facing.
+var AllowedEfforts = []string{"low", "medium", "high", "max"}
+
+// IsAllowedEffort reports whether e is one of AllowedEfforts. The empty
+// string is not allowed (empty means "no effort override, use CLI default").
+func IsAllowedEffort(e string) bool {
+	if e == "" {
+		return false
+	}
+	for _, x := range AllowedEfforts {
+		if x == e {
+			return true
+		}
+	}
+	return false
+}
