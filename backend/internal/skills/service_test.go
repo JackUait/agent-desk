@@ -44,3 +44,23 @@ func TestServiceListUser(t *testing.T) {
 		t.Errorf("unexpected item[1]: %+v", items[1])
 	}
 }
+
+func TestServiceListPlugin(t *testing.T) {
+	tmp := t.TempDir()
+	pluginSkills := filepath.Join(tmp, "plugins", "cache", "caveman", "1.0.0", "skills")
+	writeFile(t, filepath.Join(pluginSkills, "caveman", "SKILL.md"),
+		"---\nname: caveman\ndescription: talk caveman\n---\nbody")
+
+	svc := NewService(Roots{Readable: []string{pluginSkills}})
+	items, err := svc.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(items))
+	}
+	it := items[0]
+	if it.Source != SourcePlugin || !it.ReadOnly || it.PluginName != "caveman" {
+		t.Errorf("unexpected plugin item: %+v", it)
+	}
+}
