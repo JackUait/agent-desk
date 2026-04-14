@@ -112,6 +112,92 @@ describe("CardModal", () => {
     expect(screen.queryByTestId("modal-overlay")).not.toBeInTheDocument();
   });
 
+  it("side-peek does not close when clicking inside the popup", async () => {
+    const onClose = vi.fn();
+    renderModal({ previewMode: "side-peek", onClose });
+    await userEvent.click(screen.getByDisplayValue("Implement auth flow"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("side-peek closes when clicking outside on a non-exempt element", async () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div data-testid="outside-area">outside</div>
+        <CardModal
+          card={makeCard()}
+          userMessages={messages}
+          chatStream={initialChatStreamState}
+          models={MODELS}
+          onSend={vi.fn()}
+          onApprove={vi.fn()}
+          onMerge={vi.fn()}
+          onClose={onClose}
+          onUpdate={() => {}}
+          onUpload={() => Promise.resolve()}
+          onDeleteAttachment={() => Promise.resolve()}
+          previewMode="side-peek"
+        />
+      </div>,
+    );
+    await userEvent.click(screen.getByTestId("outside-area"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("side-peek does not close when clicking an element marked data-sidepeek-safe", async () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <article data-sidepeek-safe>a card</article>
+        <button type="button" data-sidepeek-safe>+ Add a card</button>
+        <CardModal
+          card={makeCard()}
+          userMessages={messages}
+          chatStream={initialChatStreamState}
+          models={MODELS}
+          onSend={vi.fn()}
+          onApprove={vi.fn()}
+          onMerge={vi.fn()}
+          onClose={onClose}
+          onUpdate={() => {}}
+          onUpload={() => Promise.resolve()}
+          onDeleteAttachment={() => Promise.resolve()}
+          previewMode="side-peek"
+        />
+      </div>,
+    );
+    await userEvent.click(screen.getByText("a card"));
+    await userEvent.click(screen.getByText("+ Add a card"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("modal mode does not trigger outside-click close handler", async () => {
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div data-testid="outside-area">outside</div>
+        <CardModal
+          card={makeCard()}
+          userMessages={messages}
+          chatStream={initialChatStreamState}
+          models={MODELS}
+          onSend={vi.fn()}
+          onApprove={vi.fn()}
+          onMerge={vi.fn()}
+          onClose={onClose}
+          onUpdate={() => {}}
+          onUpload={() => Promise.resolve()}
+          onDeleteAttachment={() => Promise.resolve()}
+        />
+      </div>,
+    );
+    // Modal renders a backdrop that covers the page; outside-area is not reachable.
+    // Verify the non-side-peek path does not attach our custom listener by asserting
+    // clicking the modal content itself does not call onClose.
+    await userEvent.click(screen.getByDisplayValue("Implement auth flow"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("renders the chooser with effort inside the modal", () => {
     renderModal({
       card: makeCard({ model: "claude-sonnet-4-6", effort: "high" }),

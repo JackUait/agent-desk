@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { Card, Message, Model } from "../../shared/types/domain";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { ChatPanel } from "../chat";
@@ -49,6 +50,19 @@ export function CardModal({
   previewMode = "modal",
 }: CardModalProps) {
   const isSidePeek = previewMode === "side-peek";
+
+  useEffect(() => {
+    if (!isSidePeek) return;
+    const handler = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-testid="card-preview-root"]')) return;
+      if (target.closest("[data-sidepeek-safe]")) return;
+      onClose();
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [isSidePeek, onClose]);
 
   return (
     <Dialog

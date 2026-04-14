@@ -25,6 +25,7 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
             <button
               type="button"
               aria-label="Add card to top"
+              data-sidepeek-safe
               onClick={() => onAddCard("top")}
               className="flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-text-secondary transition hover:bg-bg-page hover:text-text-primary"
             >
@@ -53,6 +54,7 @@ export function Column({ column, cards, enteringCards, exitingCards, workingCard
       {onAddCard && (
         <button
           type="button"
+          data-sidepeek-safe
           onClick={() => onAddCard("bottom")}
           className="mt-1 cursor-pointer rounded-md border border-dashed border-border-card px-2 py-2 text-xs text-text-secondary transition hover:border-text-secondary hover:text-text-primary"
         >

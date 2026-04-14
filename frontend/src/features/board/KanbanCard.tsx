@@ -23,6 +23,7 @@ export function KanbanCard({
 
   return (
     <article
+      data-sidepeek-safe
       onClick={onClick}
       className={cn(
         "relative group flex cursor-pointer flex-col gap-3 rounded-lg border border-border-card bg-bg-card p-4 transition",
