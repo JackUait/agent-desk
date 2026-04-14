@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { XIcon } from "lucide-react";
+import { ChevronsRight } from "lucide-react";
 import type { Card, Message, Model } from "../../shared/types/domain";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { ChatPanel } from "../chat";
@@ -103,12 +103,12 @@ export function CardModal({
               type="button"
               aria-label="Close side peek"
               onClick={onClose}
-              className="absolute left-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition hover:bg-bg-hover hover:text-text-primary"
+              className="absolute left-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition hover:bg-bg-hover hover:text-text-primary"
             >
-              <XIcon width={15} height={15} />
+              <ChevronsRight width={22} height={22} strokeWidth={1.75} />
             </button>
           )}
-          <div className={isSidePeek ? "overflow-y-auto border-r border-border-card p-6" : "overflow-y-auto border-r border-border-card p-8"}>
+          <div className={isSidePeek ? "overflow-y-auto overscroll-contain border-r border-border-card p-6" : "overflow-y-auto border-r border-border-card p-8"}>
             <CardContent
               card={card}
               projectTitle={projectTitle}

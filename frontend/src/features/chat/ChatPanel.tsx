@@ -198,7 +198,7 @@ export function ChatPanel({
   return (
     <div className="flex h-full min-h-0 flex-col bg-bg-card" data-testid="chat-panel">
       <div
-        className="flex flex-1 min-h-0 flex-col gap-3.5 overflow-y-auto px-4 py-4"
+        className="flex flex-1 min-h-0 flex-col gap-3.5 overflow-y-auto overscroll-contain px-4 py-4"
         data-testid="message-list"
       >
         {Array.from({ length: zipLen }, (_, i) => {
