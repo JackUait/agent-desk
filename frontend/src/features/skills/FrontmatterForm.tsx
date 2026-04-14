@@ -7,27 +7,30 @@ interface Props {
 export function FrontmatterForm({ value, onChange, readOnly }: Props) {
   const update = (key: string, v: string) => onChange({ ...value, [key]: v });
   return (
-    <div className="flex flex-col gap-2 px-4 py-3">
-      <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-text-muted">
-        name
-        <input
-          aria-label="name"
-          value={value.name ?? ""}
-          disabled={readOnly}
-          onChange={(e) => update("name", e.target.value)}
-          className="rounded-md border border-border-card bg-bg-card px-2 py-1 text-[13px] normal-case text-text-primary"
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wide text-text-muted">
-        description
-        <input
-          aria-label="description"
-          value={value.description ?? ""}
-          disabled={readOnly}
-          onChange={(e) => update("description", e.target.value)}
-          className="rounded-md border border-border-card bg-bg-card px-2 py-1 text-[13px] normal-case text-text-primary"
-        />
-      </label>
+    <div className="border-b border-border-card px-6 pt-5 pb-4">
+      <div className="flex items-center gap-1.5 pb-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-muted">
+          Frontmatter
+        </span>
+        <span className="h-px flex-1 bg-border-hairline" />
+      </div>
+      <input
+        aria-label="name"
+        value={value.name ?? ""}
+        disabled={readOnly}
+        onChange={(e) => update("name", e.target.value)}
+        placeholder="untitled-skill"
+        spellCheck={false}
+        className="w-full min-w-0 border-0 bg-transparent p-0 text-[20px] font-semibold tracking-tight text-text-primary outline-none placeholder:text-text-muted/70 disabled:opacity-70"
+      />
+      <input
+        aria-label="description"
+        value={value.description ?? ""}
+        disabled={readOnly}
+        onChange={(e) => update("description", e.target.value)}
+        placeholder="One line — when the agent should use this skill"
+        className="mt-1 w-full min-w-0 border-0 bg-transparent p-0 text-[13px] leading-relaxed text-text-secondary outline-none placeholder:text-text-muted/80 disabled:opacity-70"
+      />
     </div>
   );
 }

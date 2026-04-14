@@ -9,6 +9,7 @@ export function GlobalSkillsButton() {
       <button
         type="button"
         aria-label="skills"
+        data-sidepeek-safe
         onClick={() => setOpen(true)}
         className="fixed right-14 top-4 z-40 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-secondary transition hover:bg-bg-hover hover:text-text-primary"
       >

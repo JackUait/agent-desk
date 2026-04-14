@@ -107,6 +107,73 @@ describe("SkillsDialog", () => {
     expect(parent?.className ?? "").not.toMatch(/inset-0/);
   });
 
+  it("side-peek closes when clicking outside the panel", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({ items: [] });
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div data-testid="outside-area">outside</div>
+        <SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />
+      </div>,
+    );
+    await waitFor(() => expect(screen.getByTestId("skills-preview-root")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("outside-area"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("side-peek does not close when clicking inside the panel", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({ items: [] });
+    const onClose = vi.fn();
+    render(<SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />);
+    const root = await screen.findByTestId("skills-preview-root");
+    fireEvent.click(root);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("side-peek does not close when clicking an element marked data-sidepeek-safe", async () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({ items: [] });
+    const onClose = vi.fn();
+    render(
+      <div>
+        <button type="button" data-sidepeek-safe>skills trigger</button>
+        <SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />
+      </div>,
+    );
+    await screen.findByTestId("skills-preview-root");
+    fireEvent.click(screen.getByText("skills trigger"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("modal mode does not close on outside click", async () => {
+    mocked.list.mockResolvedValue({ items: [] });
+    const onClose = vi.fn();
+    render(
+      <div>
+        <div data-testid="outside-area">outside</div>
+        <SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />
+      </div>,
+    );
+    await screen.findByTestId("skills-preview-root");
+    // outside-area is behind the modal backdrop — simulate a direct click anyway
+    fireEvent.click(screen.getByTestId("outside-area"));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("dirty-close shows confirm", async () => {
     mocked.list.mockResolvedValue({
       items: [

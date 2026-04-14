@@ -97,6 +97,7 @@ export function ProjectSidebar({
                 type="button"
                 aria-label={`skills for ${p.title}`}
                 data-active={active ? "true" : "false"}
+                data-sidepeek-safe
                 onClick={() => setSkillsForProjectId(p.id)}
                 className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-[3px] text-text-muted opacity-0 transition hover:bg-[rgba(55,53,47,0.06)] hover:text-text-secondary group-hover:opacity-100 data-[active=true]:opacity-100"
               >

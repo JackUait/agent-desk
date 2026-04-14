@@ -20,7 +20,7 @@ export function NewSkillDialog({ open, defaultKind, onClose, onCreate }: Props) 
     onClose();
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div data-sidepeek-safe className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <form onSubmit={submit} className="w-80 rounded-lg bg-bg-card p-4">
         <div className="mb-2 text-[13px] font-semibold text-text-primary">New {kind}</div>
         <label className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">

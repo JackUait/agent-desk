@@ -8,7 +8,7 @@ interface Props {
 export function DeleteSkillConfirm({ open, name, onCancel, onConfirm }: Props) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div data-sidepeek-safe className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="w-80 rounded-lg bg-bg-card p-4">
         <div className="mb-3 text-[13px] text-text-primary">Delete "{name}"?</div>
         <div className="flex justify-end gap-2">
