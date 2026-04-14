@@ -9,6 +9,36 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/card"
 )
 
+func TestSetTitleDoesNotDirtyCard(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "original")
+
+	h := NewHandlers(svc)
+	res, err := h.SetTitle(context.Background(), c.ID, map[string]any{"title": "agent chose this"})
+	if err != nil || res.IsError {
+		t.Fatalf("SetTitle: res=%+v err=%v", res, err)
+	}
+	flags, _ := svc.DrainDirty(c.ID)
+	if len(flags) != 0 {
+		t.Fatalf("expected no dirty flags after MCP SetTitle, got %+v", flags)
+	}
+}
+
+func TestSetDescriptionDoesNotDirtyCard(t *testing.T) {
+	svc := card.NewService(card.NewStore())
+	c := svc.CreateCard("p", "t")
+
+	h := NewHandlers(svc)
+	res, err := h.SetDescription(context.Background(), c.ID, map[string]any{"description": "agent body"})
+	if err != nil || res.IsError {
+		t.Fatalf("SetDescription: res=%+v err=%v", res, err)
+	}
+	flags, _ := svc.DrainDirty(c.ID)
+	if len(flags) != 0 {
+		t.Fatalf("expected no dirty flags after MCP SetDescription, got %+v", flags)
+	}
+}
+
 type fakeBroadcaster struct {
 	calls []struct {
 		cardID string
@@ -42,7 +72,7 @@ type fakeMutator struct {
 }
 
 func (f *fakeMutator) GetCard(id string) (card.Card, error) { return f.getCardResponse, f.getCardErr }
-func (f *fakeMutator) UpdateFields(id string, fields map[string]any) (card.Card, error) {
+func (f *fakeMutator) UpdateFieldsFromAgent(id string, fields map[string]any) (card.Card, error) {
 	title, _ := fields["title"].(string)
 	return card.Card{ID: id, Title: title}, nil
 }

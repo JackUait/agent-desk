@@ -140,7 +140,7 @@ func (h *Handlers) SetTitle(_ context.Context, cardID string, args map[string]an
 	if len(title) > 200 {
 		return errResult("title exceeds 200 chars"), nil
 	}
-	c, err := h.svc.UpdateFields(cardID, map[string]any{"title": title})
+	c, err := h.svc.UpdateFieldsFromAgent(cardID, map[string]any{"title": title})
 	if err != nil {
 		return errResult("%v", err), nil
 	}
@@ -156,7 +156,7 @@ func (h *Handlers) SetDescription(_ context.Context, cardID string, args map[str
 	if len(desc) > 8000 {
 		return errResult("description exceeds 8000 chars"), nil
 	}
-	c, err := h.svc.UpdateFields(cardID, map[string]any{"description": desc})
+	c, err := h.svc.UpdateFieldsFromAgent(cardID, map[string]any{"description": desc})
 	if err != nil {
 		return errResult("%v", err), nil
 	}
@@ -187,7 +187,7 @@ func (h *Handlers) SetComplexity(_ context.Context, cardID string, args map[stri
 	default:
 		return errResult("invalid complexity %q", cx), nil
 	}
-	c, err := h.svc.UpdateFields(cardID, map[string]any{"complexity": cx})
+	c, err := h.svc.UpdateFieldsFromAgent(cardID, map[string]any{"complexity": cx})
 	if err != nil {
 		return errResult("%v", err), nil
 	}
@@ -298,7 +298,7 @@ func (h *Handlers) SetAcceptanceCriteria(_ context.Context, cardID string, args 
 	if !present {
 		return errResult("missing required arg 'items'"), nil
 	}
-	c, err := h.svc.UpdateFields(cardID, map[string]any{"acceptanceCriteria": items})
+	c, err := h.svc.UpdateFieldsFromAgent(cardID, map[string]any{"acceptanceCriteria": items})
 	if err != nil {
 		return errResult("%v", err), nil
 	}
@@ -311,7 +311,7 @@ func (h *Handlers) SetRelevantFiles(_ context.Context, cardID string, args map[s
 	if !present {
 		return errResult("missing required arg 'paths'"), nil
 	}
-	c, err := h.svc.UpdateFields(cardID, map[string]any{"relevantFiles": paths})
+	c, err := h.svc.UpdateFieldsFromAgent(cardID, map[string]any{"relevantFiles": paths})
 	if err != nil {
 		return errResult("%v", err), nil
 	}
