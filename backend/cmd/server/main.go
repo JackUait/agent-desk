@@ -13,6 +13,7 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/mcp"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	ws "github.com/jackuait/agent-desk/backend/internal/websocket"
@@ -56,8 +57,13 @@ func main() {
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
 
+	mcpSessions := mcp.NewSessions()
+	mcpHandler := mcp.NewServer(cardSvc, mcpSessions)
+	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/mcp/", http.StripPrefix("/mcp", mcpHandler))
+
 	wsHub := ws.NewHub()
-	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, nil, 0)
+	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, mcpSessions, 8080)
 	wsHandler.RegisterRoutes(mux)
 
 	modelsHandler := agent.NewModelsHandler()
