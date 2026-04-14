@@ -1,3 +1,5 @@
+import { Markdown } from "../../shared/ui/Markdown";
+
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
@@ -23,9 +25,9 @@ export function ChatMessage({ role, content, streaming }: ChatMessageProps) {
       <span className="text-[11px] font-semibold tracking-[0.04em] uppercase opacity-70">
         {label}
       </span>
-      <p className="m-0 text-[14px] leading-[1.5] whitespace-pre-wrap break-words">
-        {displayContent}
-      </p>
+      <div className="text-[14px] leading-[1.5]">
+        <Markdown>{displayContent}</Markdown>
+      </div>
     </div>
   );
 }

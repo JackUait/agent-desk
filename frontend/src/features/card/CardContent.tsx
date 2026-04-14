@@ -1,5 +1,6 @@
 import type { Card } from "../../shared/types/domain";
 import { Button } from "@/components/ui/button";
+import { Markdown } from "../../shared/ui/Markdown";
 import { ProgressBar } from "./ProgressBar";
 import { BlockedBanner } from "./BlockedBanner";
 import { LabelChips } from "./LabelChips";
@@ -55,7 +56,9 @@ export function CardContent({ card, projectTitle, onApprove, onMerge }: CardCont
       {card.blockedReason && <BlockedBanner reason={card.blockedReason} />}
 
       {card.description && (
-        <p className="text-sm leading-relaxed text-text-secondary m-0">{card.description}</p>
+        <div className="text-sm leading-relaxed text-text-secondary">
+          <Markdown>{card.description}</Markdown>
+        </div>
       )}
 
       {card.acceptanceCriteria.length > 0 && (

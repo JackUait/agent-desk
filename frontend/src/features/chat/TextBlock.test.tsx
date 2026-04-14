@@ -32,4 +32,25 @@ describe("TextBlock", () => {
     const el = screen.getByTestId("text-block");
     expect(el).toHaveAttribute("data-streaming", "false");
   });
+
+  it("renders a markdown bulleted list as <li> elements", () => {
+    const { container } = render(
+      <TextBlock block={make({ text: "- one\n- two", done: true })} />,
+    );
+    const items = container.querySelectorAll("li");
+    expect(items.length).toBe(2);
+    expect(items[0].textContent).toContain("one");
+    expect(items[1].textContent).toContain("two");
+  });
+
+  it("still renders the streaming caret alongside markdown when not done", () => {
+    const { container } = render(
+      <TextBlock block={make({ text: "- one", done: false })} />,
+    );
+    const el = screen.getByTestId("text-block");
+    expect(el).toHaveAttribute("data-streaming", "true");
+    // caret is an aria-hidden span sibling of the markdown
+    const carets = container.querySelectorAll('span[aria-hidden="true"]');
+    expect(carets.length).toBeGreaterThan(0);
+  });
 });

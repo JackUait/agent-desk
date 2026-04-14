@@ -183,6 +183,24 @@ describe("CardContent", () => {
     expect(screen.getByText("src/main.ts")).toBeInTheDocument();
   });
 
+  it("renders description as GitHub-flavored markdown", () => {
+    render(
+      <CardContent
+        card={makeCard({
+          description: "**bold** and `code` and [link](https://example.com)",
+        })}
+        onApprove={noop}
+        onMerge={noop}
+      />,
+    );
+    const strong = screen.getByText("bold");
+    expect(strong.tagName).toBe("STRONG");
+    const code = screen.getByText("code");
+    expect(code.tagName).toBe("CODE");
+    const link = screen.getByRole("link", { name: "link" });
+    expect(link).toHaveAttribute("href", "https://example.com");
+  });
+
   it("renders PR link as anchor", () => {
     render(
       <CardContent

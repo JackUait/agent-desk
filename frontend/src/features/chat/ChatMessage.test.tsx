@@ -35,4 +35,22 @@ describe("ChatMessage", () => {
     const { container } = render(<ChatMessage role="assistant" content="hi" />);
     expect(container.firstElementChild!.className).toMatch(/assistant/);
   });
+
+  it("renders bold markdown with a <strong> element", () => {
+    const { container } = render(
+      <ChatMessage role="assistant" content="Hello **world**" />,
+    );
+    const strong = container.querySelector("strong");
+    expect(strong).not.toBeNull();
+    expect(strong!.textContent).toBe("world");
+  });
+
+  it("renders inline code markdown with a <code> element", () => {
+    const { container } = render(
+      <ChatMessage role="assistant" content={"see `foo`"} />,
+    );
+    const code = container.querySelector("code");
+    expect(code).not.toBeNull();
+    expect(code!.textContent).toBe("foo");
+  });
 });
