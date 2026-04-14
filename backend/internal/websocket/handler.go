@@ -19,6 +19,34 @@ import (
 	gowebsocket "nhooyr.io/websocket"
 )
 
+type attachmentLookup func(cardID, name string) (agent.AttachmentInfo, bool)
+
+// buildAgentMessage drains any pending user edits for cardID and, if there
+// are any, wraps message in the card-edits-since-last-turn block.
+// lookup resolves added filenames to size + mime for the wrapper; pass nil
+// to emit a flag-only note.
+func buildAgentMessage(svc *card.Service, cardID, message string, lookup attachmentLookup) string {
+	flags, diffAny := svc.DrainDirty(cardID)
+	if len(flags) == 0 {
+		return message
+	}
+	var added []agent.AttachmentInfo
+	var removed []string
+	if d, ok := diffAny.(card.AttachmentDiff); ok {
+		removed = d.Removed
+		for _, name := range d.Added {
+			if lookup != nil {
+				if info, found := lookup(cardID, name); found {
+					added = append(added, info)
+					continue
+				}
+			}
+			added = append(added, agent.AttachmentInfo{Name: name})
+		}
+	}
+	return agent.WrapUserMessage(message, flags, added, removed)
+}
+
 // Handler wires WebSocket connections to the Hub and Agent Manager.
 type Handler struct {
 	hub          *Hub
@@ -123,13 +151,14 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		wrappedMessage := buildAgentMessage(h.cardSvc, cardID, message, nil)
 		events := make(chan agent.StreamEvent, 64)
 		if sendErr := h.manager.Send(agent.SendRequest{
 			CardID:        cardID,
 			SessionID:     c.SessionID,
 			Model:         c.Model,
 			Effort:        c.Effort,
-			Message:       message,
+			Message:       wrappedMessage,
 			WorkDir:       workDir,
 			McpConfigPath: mcpConfigPath,
 		}, events); sendErr != nil {
