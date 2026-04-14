@@ -57,7 +57,7 @@ func main() {
 	boardHandler.RegisterRoutes(mux)
 
 	wsHub := ws.NewHub()
-	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore)
+	wsHandler := ws.NewHandler(wsHub, agentMgr, cardSvc, projectStore, nil, 0)
 	wsHandler.RegisterRoutes(mux)
 
 	modelsHandler := agent.NewModelsHandler()

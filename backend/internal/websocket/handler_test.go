@@ -15,6 +15,7 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/mcp"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	wsinternal "github.com/jackuait/agent-desk/backend/internal/websocket"
 	gowebsocket "nhooyr.io/websocket"
@@ -79,7 +80,7 @@ func buildServerWithSpy(t *testing.T, argvFile string) (srv *httptest.Server, sv
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager(spyClaudeBin(t, argvFile))
 	projStore := project.NewStore(noopGit{})
-	h := wsinternal.NewHandler(hub, manager, svc, projStore)
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -137,7 +138,7 @@ func buildServer(t *testing.T) (srv *httptest.Server, cardID string, hub *wsinte
 	// Use "false" as the agent binary — it exits immediately so tests don't hang.
 	manager := agent.NewManager("false")
 	projStore := project.NewStore(noopGit{})
-	h := wsinternal.NewHandler(hub, manager, svc, projStore)
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, nil, 0)
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -242,7 +243,7 @@ func collectBridgeFrames(t *testing.T, events []agent.StreamEvent) (string, []ma
 	c := svc.CreateCard("proj-test", "bridge test")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -492,7 +493,7 @@ func TestEventBridge_ReadyForReviewStillMovesCard(t *testing.T) {
 	}
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -966,7 +967,7 @@ func TestEventBridge_PersistsAssistantMessage_OnTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge persist")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -1009,7 +1010,7 @@ func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 	c := svc.CreateCard("proj-test", "bridge empty")
 	hub := wsinternal.NewHub()
 	manager := agent.NewManager("false")
-	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
 
 	ch := make(chan []byte, 256)
 	hub.Subscribe(c.ID, ch)
@@ -1038,6 +1039,151 @@ func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 	if len(msgs) != 0 {
 		t.Fatalf("expected 0 persisted messages for empty text delta, got %d", len(msgs))
 	}
+}
+
+// mcpSpyClaudeBin writes a shell script that:
+//   - appends each invocation's argv to argvFile (one arg per line, blank
+//     line between invocations) — same shape as spyClaudeBin
+//   - if --mcp-config <path> appears in argv, copies that file's contents
+//     to mcpCopyFile so the test can read the temp .mcp.json BEFORE the
+//     handler's cleanup goroutine removes it.
+func mcpSpyClaudeBin(t *testing.T, argvFile, mcpCopyFile string) string {
+	t.Helper()
+	script := fmt.Sprintf(`#!/bin/sh
+{ printf '%%s\n' "$@"; printf -- '---\n'; } >> %q
+seen=0
+for a in "$@"; do
+  if [ $seen = 1 ]; then
+    cp "$a" %q 2>/dev/null || true
+    seen=0
+    continue
+  fi
+  if [ "$a" = "--mcp-config" ]; then
+    seen=1
+  fi
+done
+exit 0
+`, argvFile, mcpCopyFile)
+	path := filepath.Join(t.TempDir(), "spy-claude-mcp.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("mcpSpyClaudeBin write: %v", err)
+	}
+	return path
+}
+
+// TestHandler_MintsMcpSession_WhenConfigured asserts that when a Handler is
+// constructed with a non-nil *mcp.Sessions and a non-zero mcpPort, dispatching
+// a single message frame causes exactly one Mint, the spawned agent argv
+// includes --mcp-config + --allowed-tools, the temp config file contains a
+// URL pointing at the configured port with the minted token, and the token
+// is revoked + the file removed once the turn completes.
+func TestHandler_MintsMcpSession_WhenConfigured(t *testing.T) {
+	tmp := t.TempDir()
+	argvFile := filepath.Join(tmp, "argv.txt")
+	mcpCopyFile := filepath.Join(tmp, "mcp-config-copy.json")
+
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "mcp test")
+
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager(mcpSpyClaudeBin(t, argvFile, mcpCopyFile))
+	projStore := project.NewStore(noopGit{})
+	sessions := mcp.NewSessions()
+	const mcpPort = 18765
+	h := wsinternal.NewHandler(hub, manager, svc, projStore, sessions, mcpPort)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	conn, ctx, cancel := dialWS(t, srv, c.ID)
+	defer cancel()
+	defer conn.CloseNow()
+
+	msg, _ := json.Marshal(map[string]string{
+		"type":    "message",
+		"content": "hi",
+	})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msg); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	inv := waitForSpyArgv(t, argvFile, 2*time.Second)
+	if len(inv) != 1 {
+		t.Fatalf("expected exactly one spawn invocation, got %d: %v", len(inv), inv)
+	}
+
+	// Locate --mcp-config <path> and --allowed-tools mcp__agent_desk__*.
+	var cfgPath string
+	var allowedTools string
+	for i, a := range inv[0] {
+		if a == "--mcp-config" && i+1 < len(inv[0]) {
+			cfgPath = inv[0][i+1]
+		}
+		if a == "--allowed-tools" && i+1 < len(inv[0]) {
+			allowedTools = inv[0][i+1]
+		}
+	}
+	if cfgPath == "" {
+		t.Fatalf("expected --mcp-config <path> in argv; got %v", inv[0])
+	}
+	if allowedTools != "mcp__agent_desk__*" {
+		t.Fatalf("expected --allowed-tools mcp__agent_desk__*, got %q (argv=%v)", allowedTools, inv[0])
+	}
+
+	// The spy bin copied the temp config to mcpCopyFile *before* exiting, so
+	// even though the cleanup goroutine has likely already removed the
+	// original by now, we still have its bytes for inspection.
+	raw, err := os.ReadFile(mcpCopyFile)
+	if err != nil {
+		t.Fatalf("read mcp config copy: %v (cfgPath=%s)", err, cfgPath)
+	}
+
+	var parsed struct {
+		McpServers map[string]struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal mcp config: %v — raw=%s", err, raw)
+	}
+	srvCfg, ok := parsed.McpServers["agent_desk"]
+	if !ok {
+		t.Fatalf("expected mcpServers.agent_desk entry; got %+v", parsed)
+	}
+	if srvCfg.Type != "http" {
+		t.Fatalf("expected type=http, got %q", srvCfg.Type)
+	}
+	wantPrefix := fmt.Sprintf("http://127.0.0.1:%d/mcp?token=", mcpPort)
+	if !strings.HasPrefix(srvCfg.URL, wantPrefix) {
+		t.Fatalf("expected URL prefix %q, got %q", wantPrefix, srvCfg.URL)
+	}
+	token := strings.TrimPrefix(srvCfg.URL, wantPrefix)
+	if token == "" {
+		t.Fatal("expected non-empty token in mcp config URL")
+	}
+
+	// Eventually the cleanup goroutine revokes the token and removes the
+	// temp file. Poll briefly to avoid flake.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, exists := sessions.Resolve(token); exists {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		break
+	}
+	if cardID, exists := sessions.Resolve(token); exists {
+		t.Fatalf("expected token to be revoked after turn; still resolves to %q", cardID)
+	}
+	if _, statErr := os.Stat(cfgPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected temp mcp config %s removed after turn; stat err=%v", cfgPath, statErr)
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
 func TestHandler_Returns404ForUnknownCard(t *testing.T) {

@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
+	"github.com/jackuait/agent-desk/backend/internal/mcp"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 	gowebsocket "nhooyr.io/websocket"
@@ -23,11 +25,23 @@ type Handler struct {
 	manager      *agent.Manager
 	cardSvc      *card.Service
 	projectStore *project.Store
+	sessions     *mcp.Sessions
+	mcpPort      int
 }
 
-// NewHandler returns a Handler.
-func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store) *Handler {
-	return &Handler{hub: hub, manager: manager, cardSvc: cardSvc, projectStore: projectStore}
+// NewHandler returns a Handler. sessions and mcpPort may be nil/0; when both
+// are configured the handler mints a per-turn MCP session token and writes a
+// temp .mcp.json that the spawned agent uses to call back into the local
+// MCP server.
+func NewHandler(hub *Hub, manager *agent.Manager, cardSvc *card.Service, projectStore *project.Store, sessions *mcp.Sessions, mcpPort int) *Handler {
+	return &Handler{
+		hub:          hub,
+		manager:      manager,
+		cardSvc:      cardSvc,
+		projectStore: projectStore,
+		sessions:     sessions,
+		mcpPort:      mcpPort,
+	}
 }
 
 // HandleWebSocket upgrades the HTTP connection for card {id} to WebSocket,
@@ -83,20 +97,51 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		if proj, ok := h.projectStore.Get(c.ProjectID); ok {
 			workDir = proj.Path
 		}
+
+		var (
+			mcpConfigPath string
+			mcpToken      string
+		)
+		if h.sessions != nil && h.mcpPort > 0 {
+			mcpToken = h.sessions.Mint(cardID)
+			cfgPath, cfgErr := writeMcpConfig(cardID, mcpToken, h.mcpPort)
+			if cfgErr != nil {
+				log.Printf("ws: mcp config write failed for card %s: %v", cardID, cfgErr)
+			} else {
+				mcpConfigPath = cfgPath
+			}
+		}
+
+		// cleanupMcp revokes the per-turn token + removes the temp config.
+		// Safe to call even if no token was minted.
+		cleanupMcp := func() {
+			if mcpToken != "" {
+				h.sessions.Revoke(mcpToken)
+			}
+			if mcpConfigPath != "" {
+				_ = os.Remove(mcpConfigPath)
+			}
+		}
+
 		events := make(chan agent.StreamEvent, 64)
 		if sendErr := h.manager.Send(agent.SendRequest{
-			CardID:    cardID,
-			SessionID: c.SessionID,
-			Model:     c.Model,
-			Effort:    c.Effort,
-			Message:   message,
-			WorkDir:   workDir,
+			CardID:        cardID,
+			SessionID:     c.SessionID,
+			Model:         c.Model,
+			Effort:        c.Effort,
+			Message:       message,
+			WorkDir:       workDir,
+			McpConfigPath: mcpConfigPath,
 		}, events); sendErr != nil {
 			log.Printf("ws: send error for card %s: %v", cardID, sendErr)
 			h.broadcastError(cardID, sendErr.Error())
+			cleanupMcp()
 			return
 		}
-		go h.StartEventBridge(cardID, events)
+		go func() {
+			h.StartEventBridge(cardID, events)
+			cleanupMcp()
+		}()
 	}
 
 	// Reader loop: WebSocket messages → agent/service actions.
@@ -367,5 +412,33 @@ func (h *Handler) broadcastCard(cardID string, c card.Card) {
 // RegisterRoutes mounts the WebSocket handler.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/cards/{id}/ws", h.HandleWebSocket)
+}
+
+// writeMcpConfig serialises a minimal Claude CLI .mcp.json that points the
+// spawned agent at the local MCP HTTP server with the per-turn session
+// token. The caller owns the returned path and is responsible for removing
+// it once the turn completes.
+func writeMcpConfig(cardID, token string, port int) (string, error) {
+	cfg := map[string]any{
+		"mcpServers": map[string]any{
+			"agent_desk": map[string]any{
+				"type": "http",
+				"url":  fmt.Sprintf("http://127.0.0.1:%d/mcp?token=%s", port, token),
+			},
+		},
+	}
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp("", "agent-desk-mcp-"+cardID+"-*.json")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.Write(payload); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
