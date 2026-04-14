@@ -12,7 +12,7 @@ export interface UseProjectsResult {
   createProject: () => Promise<void>;
   renameProject: (id: string, title: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  createCardInProject: (projectId: string, title: string, position?: "top" | "bottom") => Promise<void>;
+  createCardInProject: (projectId: string, title: string, position?: "top" | "bottom") => Promise<Card>;
   selectCard: (id: string | null) => void;
   updateCard: (card: Card) => void;
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
@@ -112,6 +112,7 @@ export function useProjects(): UseProjectsResult {
           },
         };
       });
+      return card;
     },
     [],
   );

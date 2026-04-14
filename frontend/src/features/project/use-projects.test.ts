@@ -155,8 +155,9 @@ describe("useProjects", () => {
     const { result } = renderHook(() => useProjects());
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let returned: unknown;
     await act(async () => {
-      await result.current.createCardInProject("a", "new");
+      returned = await result.current.createCardInProject("a", "new");
     });
 
     expect(result.current.cardsByProject.a?.c1).toBeDefined();
@@ -164,6 +165,7 @@ describe("useProjects", () => {
       (col) => col.id === "col-backlog",
     );
     expect(backlog?.cardIds).toContain("c1");
+    expect((returned as { id?: string })?.id).toBe("c1");
   });
 
   it("createCardInProject appends to the bottom by default", async () => {
