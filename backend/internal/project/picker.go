@@ -1,6 +1,7 @@
 package project
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -16,7 +17,7 @@ type Runner interface {
 type ExecRunner struct{}
 
 func (ExecRunner) Run(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).Output()
+	out, err := exec.Command(name, args...).CombinedOutput()
 	return string(out), err
 }
 
@@ -71,6 +72,6 @@ end try`}, true
 }
 
 func isExitError(err error) bool {
-	_, ok := err.(*exec.ExitError)
-	return ok
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr)
 }

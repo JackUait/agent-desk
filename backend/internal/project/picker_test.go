@@ -56,3 +56,17 @@ func TestPicker_RunnerError(t *testing.T) {
 		t.Error("expected error when runner fails")
 	}
 }
+
+func TestPicker_RunnerErrorWithStderrOutput_NotCancelled(t *testing.T) {
+	p := project.NewPicker("linux", stubRunner{
+		out: "zenity: command not found\n",
+		err: errors.New("exit status 127"),
+	})
+	_, cancelled, err := p.Pick()
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+	if cancelled {
+		t.Error("expected cancelled=false when stderr is non-empty")
+	}
+}
