@@ -27,11 +27,6 @@ describe("KanbanCard", () => {
     expect(screen.getByText("Set up CI pipeline")).toBeInTheDocument();
   });
 
-  it("renders the column as a tag", () => {
-    render(<KanbanCard card={card} />);
-    expect(screen.getByText("Backlog")).toBeInTheDocument();
-  });
-
   it("renders the description", () => {
     render(<KanbanCard card={card} />);
     expect(screen.getByText("Configure GitHub Actions")).toBeInTheDocument();

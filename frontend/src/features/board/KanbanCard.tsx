@@ -11,10 +11,6 @@ interface KanbanCardProps {
   onClick?: () => void;
 }
 
-function formatColumn(column: string): string {
-  return column.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
-}
-
 export function KanbanCard({
   card,
   columnId,
@@ -24,7 +20,6 @@ export function KanbanCard({
   onClick,
 }: KanbanCardProps) {
   const isDone = columnId === "col-done";
-  const initial = card.id.charAt(0).toUpperCase();
 
   return (
     <article
@@ -50,8 +45,8 @@ export function KanbanCard({
           {card.title}
         </h3>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {isWorking && (
+      {isWorking && (
+        <div className="flex flex-wrap gap-1.5">
           <Badge
             data-testid="agent-status"
             variant="secondary"
@@ -59,21 +54,13 @@ export function KanbanCard({
           >
             Working
           </Badge>
-        )}
-        <Badge variant="outline" className="border-border-card text-text-secondary">
-          {formatColumn(card.column)}
-        </Badge>
-      </div>
+        </div>
+      )}
       {card.description && (
         <p className="text-xs leading-relaxed text-text-secondary line-clamp-3">
           {card.description}
         </p>
       )}
-      <div className="flex items-center justify-between">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-bg-hover text-xs font-medium text-text-secondary">
-          {initial}
-        </span>
-      </div>
     </article>
   );
 }
