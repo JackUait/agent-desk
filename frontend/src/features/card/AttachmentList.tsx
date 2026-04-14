@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import type { Attachment } from "../../shared/types/domain";
+import { AttachmentTile } from "./AttachmentTile";
+import { AttachmentLightbox } from "./AttachmentLightbox";
 
 interface AttachmentListProps {
   cardId: string;
@@ -9,16 +11,11 @@ interface AttachmentListProps {
   hrefFor: (cardId: string, name: string) => string;
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
-}
-
 export function AttachmentList({ cardId, attachments, onUpload, onDelete, hrefFor }: AttachmentListProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [openName, setOpenName] = useState<string | null>(null);
 
   const handleFile = async (file: File) => {
     setError(null);
@@ -29,30 +26,32 @@ export function AttachmentList({ cardId, attachments, onUpload, onDelete, hrefFo
     }
   };
 
+  const openAttachment = openName
+    ? attachments.find((a) => a.name === openName) ?? null
+    : null;
+
   return (
     <div className="flex flex-col gap-2">
       <h4 className="text-xs font-medium text-text-muted uppercase tracking-wider m-0">Attachments</h4>
-      <ul className="flex flex-col gap-1 m-0 p-0 list-none">
-        {attachments.map((a) => (
-          <li key={a.name} className="flex items-center justify-between text-[13px] text-text-secondary font-mono">
-            <a
+
+      {attachments.length > 0 && (
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))" }}
+        >
+          {attachments.map((a) => (
+            <AttachmentTile
+              key={a.name}
+              attachment={a}
               href={hrefFor(cardId, a.name)}
-              download
-              className="flex-1 truncate text-accent-blue hover:underline"
-            >
-              {a.name} <span className="text-text-muted">({formatSize(a.size)}, {a.mimeType})</span>
-            </a>
-            <button
-              type="button"
-              aria-label={`remove ${a.name}`}
-              onClick={() => onDelete(a.name)}
-              className="ml-2 text-text-muted hover:text-accent-red"
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+              onOpen={setOpenName}
+              onDelete={(name) => {
+                void onDelete(name);
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       <div
         className={`border border-dashed ${dragOver ? "border-accent-blue bg-bg-hover" : "border-border-input"} rounded-md p-3 text-center text-[11px] text-text-muted cursor-pointer`}
@@ -80,6 +79,13 @@ export function AttachmentList({ cardId, attachments, onUpload, onDelete, hrefFo
         }}
       />
       {error && <div role="alert" className="text-[11px] text-accent-red">{error}</div>}
+
+      <AttachmentLightbox
+        attachment={openAttachment}
+        href={openAttachment ? hrefFor(cardId, openAttachment.name) : ""}
+        open={openAttachment !== null}
+        onClose={() => setOpenName(null)}
+      />
     </div>
   );
 }

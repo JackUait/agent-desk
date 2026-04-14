@@ -9,21 +9,58 @@ function sample(over: Partial<Attachment> = {}): Attachment {
 }
 
 describe("AttachmentList", () => {
-  it("renders each attachment with a download link", () => {
+  it("renders one tile per attachment", () => {
     render(
       <AttachmentList
         cardId="c1"
-        attachments={[sample(), sample({ name: "wireframe.png", mimeType: "image/png" })]}
+        attachments={[
+          sample(),
+          sample({ name: "wireframe.png", mimeType: "image/png" }),
+          sample({ name: "clip.mp4", mimeType: "video/mp4" }),
+        ]}
         onUpload={() => Promise.resolve()}
         onDelete={() => Promise.resolve()}
         hrefFor={(_, n) => `/files/${n}`}
       />,
     );
-    const link = screen.getByRole("link", { name: /spec\.pdf/i });
-    expect(link).toHaveAttribute("href", "/files/spec.pdf");
+    expect(screen.getByRole("button", { name: /open spec\.pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open wireframe\.png/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open clip\.mp4/i })).toBeInTheDocument();
   });
 
-  it("calls onDelete when × clicked", async () => {
+  it("opens lightbox when an image tile is clicked", async () => {
+    render(
+      <AttachmentList
+        cardId="c1"
+        attachments={[sample({ name: "wireframe.png", mimeType: "image/png" })]}
+        onUpload={() => Promise.resolve()}
+        onDelete={() => Promise.resolve()}
+        hrefFor={(_, n) => `/files/${n}`}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /open wireframe\.png/i }));
+    const images = screen.getAllByAltText("wireframe.png");
+    // tile still has the img plus the lightbox image
+    expect(images.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
+  });
+
+  it("closes lightbox when close button clicked", async () => {
+    render(
+      <AttachmentList
+        cardId="c1"
+        attachments={[sample({ name: "wireframe.png", mimeType: "image/png" })]}
+        onUpload={() => Promise.resolve()}
+        onDelete={() => Promise.resolve()}
+        hrefFor={(_, n) => `/files/${n}`}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /open wireframe\.png/i }));
+    await userEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("button", { name: /close/i })).not.toBeInTheDocument();
+  });
+
+  it("calls onDelete when tile delete button clicked", async () => {
     const onDelete = vi.fn().mockResolvedValue(undefined);
     render(
       <AttachmentList
