@@ -3,6 +3,11 @@ import { describe, it, expect, vi } from "vitest";
 import { ProjectSidebar } from "./ProjectSidebar";
 import type { Project } from "../../shared/types/domain";
 
+vi.mock("../skills/SkillsDialog", () => ({
+  SkillsDialog: ({ open, scope }: { open: boolean; scope: { kind: string; projectId?: string } }) =>
+    open ? <div data-testid={`dialog-${scope.projectId}`} /> : null,
+}));
+
 const projects: Project[] = [
   { id: "a", title: "alpha", path: "/tmp/a", colorIdx: 0, createdAt: 1 },
   { id: "b", title: "beta", path: "/tmp/b", colorIdx: 1, createdAt: 2 },
@@ -41,5 +46,20 @@ describe("ProjectSidebar", () => {
     );
     const activeEntry = screen.getByText("beta").closest("[data-active]");
     expect(activeEntry?.getAttribute("data-active")).toBe("true");
+  });
+});
+
+describe("ProjectSidebar skills button", () => {
+  it("opens project-scoped skills dialog", () => {
+    render(
+      <ProjectSidebar
+        projects={[{ id: "p1", title: "One", path: "/p1", colorIdx: 0, createdAt: 0 }]}
+        activeId={null}
+        onNewProject={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /skills for one/i }));
+    expect(screen.getByTestId("dialog-p1")).toBeInTheDocument();
   });
 });
