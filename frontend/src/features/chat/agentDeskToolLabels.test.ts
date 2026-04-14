@@ -51,4 +51,8 @@ describe("labelForAgentDeskTool", () => {
   it("falls back to tool name for unknown agent-desk tools", () => {
     expect(labelForAgentDeskTool("mcp__agent_desk__set_title", { title: "x" })).toBe("Title: x");
   });
+
+  it("returns short name for unknown-but-prefixed agent-desk tool", () => {
+    expect(labelForAgentDeskTool("mcp__agent_desk__future_tool", {})).toBe("future_tool");
+  });
 });

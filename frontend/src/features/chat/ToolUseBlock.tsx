@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChatBlock } from "./chatStream";
+import { labelForAgentDeskTool } from "./agentDeskToolLabels";
 
 interface ToolUseBlockProps {
   block: Extract<ChatBlock, { kind: "tool_use" }>;
@@ -18,6 +19,15 @@ function statusFor(block: ToolUseBlockProps["block"]): Status {
 export function ToolUseBlock({ block }: ToolUseBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const status = statusFor(block);
+
+  let parsedArgs: Record<string, unknown> = {};
+  try {
+    parsedArgs = block.partialJson ? JSON.parse(block.partialJson) : {};
+  } catch {
+    parsedArgs = {};
+  }
+  const semanticLabel = labelForAgentDeskTool(block.toolName, parsedArgs);
+  const displayLabel = semanticLabel ?? block.toolName;
   const statusLabel =
     status === "running"
       ? "running"
@@ -67,7 +77,7 @@ export function ToolUseBlock({ block }: ToolUseBlockProps) {
           ].join(" ")}
         />
         <span className="font-mono text-[12px] font-semibold tracking-[0.01em] text-text-primary">
-          {block.toolName}
+          {displayLabel}
         </span>
       </div>
       {block.partialJson && (
