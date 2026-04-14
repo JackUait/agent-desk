@@ -21,4 +21,9 @@ describe("ProgressBar", () => {
     const fill = screen.getByTestId("progress-fill");
     expect(fill).toHaveStyle({ width: "100%" });
   });
+
+  it("progressbar has accessible name from currentStep", () => {
+    render(<ProgressBar step={1} totalSteps={3} currentStep="writing tests" />);
+    expect(screen.getByRole("progressbar", { name: "writing tests" })).toBeInTheDocument();
+  });
 });
