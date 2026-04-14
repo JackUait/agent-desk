@@ -30,7 +30,7 @@ type Manager struct {
 	claudeBin string
 	builder   commandBuilder
 	mu        sync.Mutex
-	running   map[string]bool // true while a process is active for a card
+	running   map[string]*exec.Cmd // non-nil while a process is active for a card
 }
 
 // NewManager returns a Manager that will launch claudeBin as the Claude CLI binary.
@@ -38,7 +38,7 @@ func NewManager(claudeBin string) *Manager {
 	return &Manager{
 		claudeBin: claudeBin,
 		builder:   defaultBuilder,
-		running:   make(map[string]bool),
+		running:   make(map[string]*exec.Cmd),
 	}
 }
 
@@ -47,7 +47,7 @@ func NewManagerWithBuilder(claudeBin string, builder commandBuilder) *Manager {
 	return &Manager{
 		claudeBin: claudeBin,
 		builder:   builder,
-		running:   make(map[string]bool),
+		running:   make(map[string]*exec.Cmd),
 	}
 }
 
@@ -102,11 +102,10 @@ type SendRequest struct {
 // for tests.
 func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	m.mu.Lock()
-	if m.running[req.CardID] {
+	if _, ok := m.running[req.CardID]; ok {
 		m.mu.Unlock()
 		return fmt.Errorf("agent: process already running for card %q", req.CardID)
 	}
-	m.running[req.CardID] = true
 	m.mu.Unlock()
 
 	args := buildArgs(req.SessionID, req.Model, req.Effort, req.Message, req.McpConfigPath)
@@ -114,9 +113,6 @@ func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		m.mu.Lock()
-		delete(m.running, req.CardID)
-		m.mu.Unlock()
 		return fmt.Errorf("agent: stdout pipe: %w", err)
 	}
 
@@ -125,11 +121,12 @@ func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
-		m.mu.Lock()
-		delete(m.running, req.CardID)
-		m.mu.Unlock()
 		return fmt.Errorf("agent: start process: %w", err)
 	}
+
+	m.mu.Lock()
+	m.running[req.CardID] = cmd
+	m.mu.Unlock()
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -154,9 +151,18 @@ func (m *Manager) Send(req SendRequest, events chan<- StreamEvent) error {
 	return nil
 }
 
-// Kill terminates any running process for cardID.
+// Kill terminates any running process for cardID. Safe to call with no
+// active process — the call returns nil in that case.
 func (m *Manager) Kill(cardID string) error {
-	// In per-message mode, the process is short-lived. Best-effort no-op.
+	m.mu.Lock()
+	cmd, ok := m.running[cardID]
+	m.mu.Unlock()
+	if !ok || cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	if err := cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("agent: kill card %q: %w", cardID, err)
+	}
 	return nil
 }
 
@@ -164,5 +170,6 @@ func (m *Manager) Kill(cardID string) error {
 func (m *Manager) IsRunning(cardID string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.running[cardID]
+	_, ok := m.running[cardID]
+	return ok
 }

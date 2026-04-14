@@ -232,6 +232,82 @@ func TestHandler_BroadcastsErrorOnInvalidMerge(t *testing.T) {
 	conn.Close(gowebsocket.StatusNormalClosure, "")
 }
 
+// hangClaudeBin writes a shell script that ignores argv and sleeps so the
+// manager sees a long-running process — used by stop-message tests.
+func hangClaudeBin(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "hang-claude.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexec sleep 60\n"), 0o755); err != nil {
+		t.Fatalf("hangClaudeBin: %v", err)
+	}
+	return path
+}
+
+// TestHandler_StopMessageKillsRunningAgent verifies that sending a
+// {"type":"stop"} frame over the WebSocket terminates the agent process
+// spawned for that card.
+func TestHandler_StopMessageKillsRunningAgent(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	c := svc.CreateCard("proj-test", "stop test")
+
+	hub := wsinternal.NewHub()
+	manager := agent.NewManager(hangClaudeBin(t))
+	h := wsinternal.NewHandler(hub, manager, svc, project.NewStore(noopGit{}), nil, 0)
+
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/cards/" + c.ID + "/ws"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := gowebsocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.CloseNow()
+
+	time.Sleep(20 * time.Millisecond)
+
+	msgFrame, _ := json.Marshal(map[string]string{"type": "message", "content": "go"})
+	if err := conn.Write(ctx, gowebsocket.MessageText, msgFrame); err != nil {
+		t.Fatalf("write message: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if manager.IsRunning(c.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !manager.IsRunning(c.ID) {
+		t.Fatalf("expected agent to be running before stop")
+	}
+
+	stopFrame, _ := json.Marshal(map[string]string{"type": "stop"})
+	if err := conn.Write(ctx, gowebsocket.MessageText, stopFrame); err != nil {
+		t.Fatalf("write stop: %v", err)
+	}
+
+	deadline = time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if !manager.IsRunning(c.ID) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if manager.IsRunning(c.ID) {
+		t.Fatalf("expected agent to be killed after stop")
+	}
+
+	conn.Close(gowebsocket.StatusNormalClosure, "")
+}
+
 // collectBridgeFrames runs StartEventBridge against a real hub+card and
 // returns the parsed JSON frames in order. It blocks until the bridge
 // returns (events chan closed) or the short deadline expires.

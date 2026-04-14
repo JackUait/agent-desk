@@ -257,6 +257,44 @@ describe("ChatPanel send flow", () => {
   });
 });
 
+describe("ChatPanel stop button", () => {
+  it("replaces Send with Stop while turnInFlight", () => {
+    renderPanel({
+      chatStream: { ...EMPTY_STREAM, turnInFlight: true },
+      onStop: vi.fn(),
+    });
+    expect(screen.getByTestId("stop-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("send-button")).not.toBeInTheDocument();
+  });
+
+  it("calls onStop when the Stop button is clicked", async () => {
+    const user = userEvent.setup();
+    const onStop = vi.fn();
+    renderPanel({
+      chatStream: { ...EMPTY_STREAM, turnInFlight: true },
+      onStop,
+    });
+    await user.click(screen.getByTestId("stop-button"));
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onSend when Stop is clicked", async () => {
+    const user = userEvent.setup();
+    const { onSend } = renderPanel({
+      chatStream: { ...EMPTY_STREAM, turnInFlight: true },
+      onStop: vi.fn(),
+    });
+    await user.click(screen.getByTestId("stop-button"));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("shows Send (not Stop) when turnInFlight is false", () => {
+    renderPanel({ chatStream: EMPTY_STREAM, onStop: vi.fn() });
+    expect(screen.getByTestId("send-button")).toBeInTheDocument();
+    expect(screen.queryByTestId("stop-button")).not.toBeInTheDocument();
+  });
+});
+
 describe("ChatPanel card_update resync", () => {
   it("updates selection when cardModel or cardEffort changes", () => {
     const { rerender } = render(

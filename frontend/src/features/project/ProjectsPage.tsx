@@ -45,6 +45,7 @@ function CardModalWrapper({
 
   function handleApprove() { sendAction("approve"); }
   function handleMerge() { sendAction("merge"); }
+  function handleStop() { sendAction("stop"); }
 
   useEffect(() => {
     if (currentColumn && currentColumn !== card.column) {
@@ -76,6 +77,7 @@ function CardModalWrapper({
       chatStream={chatStream}
       models={models}
       onSend={(content, model, effort) => sendMessage(content, model, effort)}
+      onStop={handleStop}
       onApprove={handleApprove}
       onMerge={handleMerge}
       onClose={onClose}

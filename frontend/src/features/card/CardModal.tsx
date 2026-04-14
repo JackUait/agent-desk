@@ -12,6 +12,7 @@ interface CardModalProps {
   chatStream: ChatStreamState;
   models: Model[];
   onSend: (content: string, model: string, effort: string) => void;
+  onStop?: () => void;
   onApprove: () => void;
   onMerge: () => void;
   onClose: () => void;
@@ -24,6 +25,7 @@ export function CardModal({
   chatStream,
   models,
   onSend,
+  onStop,
   onApprove,
   onMerge,
   onClose,
@@ -51,6 +53,7 @@ export function CardModal({
               userMessages={userMessages}
               chatStream={chatStream}
               onSend={onSend}
+              onStop={onStop}
               models={models}
               cardModel={card.model}
               cardEffort={card.effort}

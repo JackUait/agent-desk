@@ -211,6 +211,18 @@ describe("useCardSocket", () => {
     expect(sent).toEqual({ type: "start" });
   });
 
+  it("sendAction('stop') sends a stop frame", () => {
+    const { result } = renderHook(() => useCardSocket("card-1"));
+    act(() => {
+      getInstance().simulateOpen();
+    });
+    act(() => {
+      result.current.sendAction("stop");
+    });
+    const sent = JSON.parse(getInstance().sent[0]);
+    expect(sent).toEqual({ type: "stop" });
+  });
+
   it("updates currentColumn on status message", () => {
     const { result } = renderHook(() => useCardSocket("card-1"));
     act(() => {

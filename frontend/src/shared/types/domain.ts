@@ -64,6 +64,7 @@ export interface Message {
 export type WSClientMessage =
   | { type: "message"; content: string; model?: string; effort?: string }
   | { type: "start" }
+  | { type: "stop" }
   | { type: "approve" }
   | { type: "merge" };
 

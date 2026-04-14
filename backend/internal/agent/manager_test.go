@@ -306,6 +306,57 @@ func TestManager_IsRunning(t *testing.T) {
 	}
 }
 
+// TestManager_Kill_TerminatesRunningProcess verifies Kill signals the
+// spawned CLI so it exits and IsRunning flips back to false.
+func TestManager_Kill_TerminatesRunningProcess(t *testing.T) {
+	m := agent.NewManager(hangBin(t))
+	events := make(chan agent.StreamEvent, 8)
+
+	if err := m.Send(agent.SendRequest{CardID: "card-kill", Message: "hi", WorkDir: ""}, events); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if m.IsRunning("card-kill") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !m.IsRunning("card-kill") {
+		t.Fatalf("expected card-kill to be running before Kill")
+	}
+
+	if err := m.Kill("card-kill"); err != nil {
+		t.Fatalf("Kill: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		for range events {
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("events channel did not close after Kill")
+	}
+
+	if m.IsRunning("card-kill") {
+		t.Errorf("expected card-kill to not be running after Kill")
+	}
+}
+
+// TestManager_Kill_UnknownCardIsNoop verifies Kill on an unknown card is
+// safe and returns nil.
+func TestManager_Kill_UnknownCardIsNoop(t *testing.T) {
+	m := agent.NewManager(echoBin(t))
+	if err := m.Kill("missing"); err != nil {
+		t.Errorf("Kill unknown: %v", err)
+	}
+}
+
 // TestManager_SendPassesWorkDirToBuilder verifies that WorkDir is threaded
 // into the commandBuilder so the process runs in the correct project directory.
 func TestManager_SendPassesWorkDirToBuilder(t *testing.T) {

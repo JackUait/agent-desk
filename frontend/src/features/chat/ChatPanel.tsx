@@ -14,6 +14,7 @@ interface ChatPanelProps {
   userMessages: Message[];
   chatStream: ChatStreamState;
   onSend: (content: string, model: string, effort: string) => void;
+  onStop?: () => void;
   models: Model[];
   cardModel: string;
   cardEffort: string;
@@ -137,6 +138,7 @@ export function ChatPanel({
   userMessages,
   chatStream,
   onSend,
+  onStop,
   models,
   cardModel,
   cardEffort,
@@ -239,14 +241,32 @@ export function ChatPanel({
               onChange={setSelection}
               disabled={readOnly || chatStream.turnInFlight}
             />
-            <Button
-              type="submit"
-              size="sm"
-              data-testid="send-button"
-              disabled={readOnly || !input.trim()}
-            >
-              Send
-            </Button>
+            {chatStream.turnInFlight ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                data-testid="stop-button"
+                onClick={() => onStop?.()}
+                disabled={readOnly || !onStop}
+                aria-label="Stop agent"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-2 rounded-[1px] bg-current"
+                />
+                Stop
+              </Button>
+            ) : (
+              <Button
+                type="submit"
+                size="sm"
+                data-testid="send-button"
+                disabled={readOnly || !input.trim()}
+              >
+                Send
+              </Button>
+            )}
           </div>
         </div>
       </form>

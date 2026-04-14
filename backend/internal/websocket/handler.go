@@ -212,6 +212,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		case "approve":
 			sendToAgent("Create a PR now.")
 
+		case "stop":
+			if killErr := h.manager.Kill(cardID); killErr != nil {
+				log.Printf("ws: Kill error for card %s: %v", cardID, killErr)
+				h.broadcastError(cardID, killErr.Error())
+			}
+
 		case "merge":
 			updated, svcErr := h.cardSvc.MoveToDone(cardID)
 			if svcErr != nil {

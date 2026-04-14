@@ -17,7 +17,7 @@ export interface UseCardSocketResult {
   userMessages: Message[];
   chatStream: ChatStreamState;
   sendMessage: (content: string, model?: string, effort?: string) => void;
-  sendAction: (type: "start" | "approve" | "merge") => void;
+  sendAction: (type: "start" | "stop" | "approve" | "merge") => void;
   cardUpdates: Partial<Card>;
   currentColumn: CardColumn | null;
   prUrl: string | null;
@@ -144,7 +144,7 @@ export function useCardSocket(cardId: string): UseCardSocketResult {
     [],
   );
 
-  const sendAction = useCallback((type: "start" | "approve" | "merge") => {
+  const sendAction = useCallback((type: "start" | "stop" | "approve" | "merge") => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     const msg: WSClientMessage = { type };
     wsRef.current.send(JSON.stringify(msg));
