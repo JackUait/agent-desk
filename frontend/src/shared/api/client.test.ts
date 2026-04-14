@@ -134,7 +134,7 @@ describe("api.getBoard", () => {
 
 describe("api.listProjects", () => {
   it("GETs /api/projects", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve([{ id: "p1", title: "repo", path: "/tmp/repo", colorIdx: 0, createdAt: 1 }]),
@@ -147,7 +147,7 @@ describe("api.listProjects", () => {
 
 describe("api.createProject", () => {
   it("POSTs /api/projects with path", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 201,
       json: () => Promise.resolve({ id: "p1", title: "r", path: "/tmp/r", colorIdx: 0, createdAt: 1 }),
@@ -165,7 +165,7 @@ describe("api.createProject", () => {
 
 describe("api.renameProject", () => {
   it("PATCHes /api/projects/:id with title", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ id: "p1", title: "new-name", path: "/tmp/r", colorIdx: 0, createdAt: 1 }),
@@ -184,7 +184,7 @@ describe("api.renameProject", () => {
 
 describe("api.deleteProject", () => {
   it("DELETEs /api/projects/:id and returns undefined for 204", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 204,
       statusText: "No Content",
@@ -198,7 +198,7 @@ describe("api.deleteProject", () => {
 
 describe("api.pickFolder", () => {
   it("POSTs /api/projects/pick-folder and returns result", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ path: "/tmp/x", cancelled: false }),
