@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardContent } from "./CardContent";
 import type { Card } from "../../shared/types/domain";
@@ -31,14 +31,20 @@ function makeCard(overrides: Partial<Card> = {}): Card {
   };
 }
 
-describe("CardContent", () => {
-  const noop = () => {};
+const noopCardHandlers = {
+  onApprove: () => {},
+  onMerge: () => {},
+  onUpdate: () => {},
+  onUpload: () => Promise.resolve(),
+  onDeleteAttachment: () => Promise.resolve(),
+};
 
+describe("CardContent", () => {
   it("renders title and description", () => {
     render(
-      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
+      <CardContent card={makeCard()} {...noopCardHandlers} />,
     );
-    expect(screen.getByText("Implement auth flow")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Implement auth flow")).toBeInTheDocument();
     expect(screen.getByText("Add JWT-based authentication")).toBeInTheDocument();
   });
 
@@ -46,8 +52,7 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "in_progress" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("In progress")).toBeInTheDocument();
@@ -58,8 +63,7 @@ describe("CardContent", () => {
       <CardContent
         card={makeCard()}
         projectTitle="agent-desk"
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("agent-desk")).toBeInTheDocument();
@@ -68,35 +72,35 @@ describe("CardContent", () => {
 
   it("omits project label when projectTitle is missing", () => {
     render(
-      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
+      <CardContent card={makeCard()} {...noopCardHandlers} />,
     );
     expect(screen.queryByText("card-abc")).not.toBeInTheDocument();
   });
 
-  it("hides buttons in backlog", () => {
+  it("hides action buttons in backlog", () => {
     render(
-      <CardContent card={makeCard()} onApprove={noop} onMerge={noop} />,
+      <CardContent card={makeCard()} {...noopCardHandlers} />,
     );
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
   });
 
-  it("hides buttons in in_progress", () => {
+  it("hides action buttons in in_progress", () => {
     render(
       <CardContent
         card={makeCard({ column: "in_progress" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
   });
 
   it("shows 'Approve' button in review without prUrl", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
@@ -106,22 +110,21 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByRole("button", { name: "Merge" })).toBeInTheDocument();
   });
 
-  it("hides buttons in done", () => {
+  it("hides action buttons in done", () => {
     render(
       <CardContent
         card={makeCard({ column: "done" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Merge" })).not.toBeInTheDocument();
   });
 
   it("calls onApprove when clicking Approve", async () => {
@@ -129,8 +132,8 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "" })}
+        {...noopCardHandlers}
         onApprove={onApprove}
-        onMerge={noop}
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "Approve" }));
@@ -142,7 +145,7 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onApprove={noop}
+        {...noopCardHandlers}
         onMerge={onMerge}
       />,
     );
@@ -154,8 +157,7 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ acceptanceCriteria: ["Must handle errors", "Must log events"] })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("Must handle errors")).toBeInTheDocument();
@@ -166,8 +168,7 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ complexity: "medium" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("medium")).toBeInTheDocument();
@@ -177,8 +178,7 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ relevantFiles: ["src/main.ts"] })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("src/main.ts")).toBeInTheDocument();
@@ -190,8 +190,7 @@ describe("CardContent", () => {
         card={makeCard({
           description: "**bold** and `code` and [link](https://example.com)",
         })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     const strong = screen.getByText("bold");
@@ -206,12 +205,42 @@ describe("CardContent", () => {
     render(
       <CardContent
         card={makeCard({ column: "review", prUrl: "https://github.com/pr/1" })}
-        onApprove={noop}
-        onMerge={noop}
+        {...noopCardHandlers}
       />,
     );
     const link = screen.getByRole("link", { name: /github\.com/ });
     expect(link).toHaveAttribute("href", "https://github.com/pr/1");
+  });
+
+  it("calls onUpdate with new title after debounce", async () => {
+    const onUpdate = vi.fn();
+    vi.useFakeTimers();
+    render(
+      <CardContent
+        card={makeCard()}
+        {...noopCardHandlers}
+        onUpdate={onUpdate}
+      />,
+    );
+    const input = screen.getByDisplayValue("Implement auth flow");
+    fireEvent.change(input, { target: { value: "new" } });
+    vi.advanceTimersByTime(500);
+    expect(onUpdate).toHaveBeenCalledWith({ title: "new" });
+    vi.useRealTimers();
+  });
+
+  it("renders attachment list from card", () => {
+    render(
+      <CardContent
+        card={makeCard({
+          attachments: [
+            { name: "a.txt", size: 10, mimeType: "text/plain", uploadedAt: 1 },
+          ],
+        })}
+        {...noopCardHandlers}
+      />,
+    );
+    expect(screen.getByText(/a\.txt/)).toBeInTheDocument();
   });
 });
 
@@ -224,12 +253,12 @@ describe("CardContent new fields", () => {
   });
 
   it("renders summary when present", () => {
-    render(<CardContent card={{ ...base, summary: "refactoring auth" }} onApprove={() => {}} onMerge={() => {}} />);
+    render(<CardContent card={{ ...base, summary: "refactoring auth" }} {...noopCardHandlers} />);
     expect(screen.getByText("refactoring auth")).toBeInTheDocument();
   });
 
   it("hides summary when empty", () => {
-    render(<CardContent card={{ ...base, summary: "" }} onApprove={() => {}} onMerge={() => {}} />);
+    render(<CardContent card={{ ...base, summary: "" }} {...noopCardHandlers} />);
     expect(screen.queryByText("refactoring auth")).not.toBeInTheDocument();
   });
 
@@ -237,8 +266,7 @@ describe("CardContent new fields", () => {
     render(
       <CardContent
         card={{ ...base, progress: { step: 2, totalSteps: 4, currentStep: "tests" } }}
-        onApprove={() => {}}
-        onMerge={() => {}}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
@@ -249,8 +277,7 @@ describe("CardContent new fields", () => {
     render(
       <CardContent
         card={{ ...base, blockedReason: "needs schema" }}
-        onApprove={() => {}}
-        onMerge={() => {}}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByRole("status", { name: /blocked.*needs schema/i })).toBeInTheDocument();
@@ -260,8 +287,7 @@ describe("CardContent new fields", () => {
     render(
       <CardContent
         card={{ ...base, labels: ["bug", "urgent"] }}
-        onApprove={() => {}}
-        onMerge={() => {}}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByText("bug")).toBeInTheDocument();
@@ -273,8 +299,7 @@ describe("CardContent new fields", () => {
     render(
       <CardContent
         card={{ ...base, updatedAt: now - 30 }}
-        onApprove={() => {}}
-        onMerge={() => {}}
+        {...noopCardHandlers}
       />,
     );
     expect(screen.getByTestId("updated-at")).toHaveTextContent(/updated\s+\d+s\s+ago/);

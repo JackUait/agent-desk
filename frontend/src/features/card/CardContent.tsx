@@ -1,15 +1,21 @@
 import type { Card } from "../../shared/types/domain";
 import { Button } from "@/components/ui/button";
-import { Markdown } from "../../shared/ui/Markdown";
 import { ProgressBar } from "./ProgressBar";
 import { BlockedBanner } from "./BlockedBanner";
 import { LabelChips } from "./LabelChips";
+import { EditableTitle } from "./EditableTitle";
+import { EditableDescription } from "./EditableDescription";
+import { AttachmentList } from "./AttachmentList";
+import { api } from "../../shared/api/client";
 
 interface CardContentProps {
   card: Card;
   projectTitle?: string;
   onApprove: () => void;
   onMerge: () => void;
+  onUpdate: (fields: Partial<Card>) => void;
+  onUpload: (file: File) => Promise<void>;
+  onDeleteAttachment: (name: string) => Promise<void>;
 }
 
 function formatColumn(column: string): string {
@@ -25,7 +31,7 @@ function formatRelative(epochSec: number): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-export function CardContent({ card, projectTitle, onApprove, onMerge }: CardContentProps) {
+export function CardContent({ card, projectTitle, onApprove, onMerge, onUpdate, onUpload, onDeleteAttachment }: CardContentProps) {
   return (
     <div className="flex flex-col gap-4 p-6 overflow-y-auto" data-testid="card-content">
       <div className="flex items-center gap-2">
@@ -39,7 +45,7 @@ export function CardContent({ card, projectTitle, onApprove, onMerge }: CardCont
 
       <LabelChips labels={card.labels} />
 
-      <h3 className="text-xl font-semibold leading-snug text-text-primary m-0">{card.title}</h3>
+      <EditableTitle value={card.title} onChange={(title) => onUpdate({ title })} />
 
       {card.summary && (
         <p className="text-sm italic text-text-secondary m-0">{card.summary}</p>
@@ -55,11 +61,15 @@ export function CardContent({ card, projectTitle, onApprove, onMerge }: CardCont
 
       {card.blockedReason && <BlockedBanner reason={card.blockedReason} />}
 
-      {card.description && (
-        <div className="text-sm leading-relaxed text-text-secondary">
-          <Markdown>{card.description}</Markdown>
-        </div>
-      )}
+      <EditableDescription value={card.description} onChange={(description) => onUpdate({ description })} />
+
+      <AttachmentList
+        cardId={card.id}
+        attachments={card.attachments ?? []}
+        onUpload={onUpload}
+        onDelete={onDeleteAttachment}
+        hrefFor={api.attachmentUrl}
+      />
 
       {card.acceptanceCriteria.length > 0 && (
         <div className="flex flex-col gap-1.5">

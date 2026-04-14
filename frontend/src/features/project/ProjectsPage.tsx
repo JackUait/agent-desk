@@ -16,13 +16,17 @@ function CardModalWrapper({
   onClose,
   updateCard,
   moveCardToColumn,
+  uploadAttachment,
+  deleteAttachment,
 }: {
   card: Card;
   projectTitle?: string;
   models: Model[];
   onClose: () => void;
-  updateCard: (card: Card) => void;
+  updateCard: (card: Card) => Promise<void>;
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
+  uploadAttachment: (cardId: string, projectId: string, file: File) => Promise<void>;
+  deleteAttachment: (cardId: string, projectId: string, name: string) => Promise<void>;
 }) {
   const {
     userMessages,
@@ -81,6 +85,9 @@ function CardModalWrapper({
       onApprove={handleApprove}
       onMerge={handleMerge}
       onClose={onClose}
+      onUpdate={(fields) => updateCard({ ...card, ...fields })}
+      onUpload={(file) => uploadAttachment(card.id, card.projectId, file)}
+      onDeleteAttachment={(name) => deleteAttachment(card.id, card.projectId, name)}
     />
   );
 }
@@ -99,6 +106,8 @@ export function ProjectsPage() {
     createCardInProject,
     selectCard,
     updateCard,
+    uploadAttachment,
+    deleteAttachment,
     moveCardToColumn,
   } = useProjects();
   const { models } = useModels();
@@ -174,6 +183,8 @@ export function ProjectsPage() {
           onClose={() => selectCard(null)}
           updateCard={updateCard}
           moveCardToColumn={moveCardToColumn}
+          uploadAttachment={uploadAttachment}
+          deleteAttachment={deleteAttachment}
         />
       )}
       {deleteTarget && (

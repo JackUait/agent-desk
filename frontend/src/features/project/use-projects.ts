@@ -14,7 +14,9 @@ export interface UseProjectsResult {
   deleteProject: (id: string) => Promise<void>;
   createCardInProject: (projectId: string, title: string, position?: "top" | "bottom") => Promise<void>;
   selectCard: (id: string | null) => void;
-  updateCard: (card: Card) => void;
+  updateCard: (card: Card) => Promise<void>;
+  uploadAttachment: (cardId: string, projectId: string, file: File) => Promise<void>;
+  deleteAttachment: (cardId: string, projectId: string, name: string) => Promise<void>;
   moveCardToColumn: (cardId: string, toColumnId: string) => void;
   setActiveProject: (id: string | null) => void;
   refresh: () => Promise<void>;
@@ -118,11 +120,55 @@ export function useProjects(): UseProjectsResult {
 
   const selectCard = useCallback((id: string | null) => setSelectedCardId(id), []);
 
-  const updateCard = useCallback((card: Card) => {
+  const updateCard = useCallback(async (card: Card) => {
     setCardsByProject((prev) => ({
       ...prev,
       [card.projectId]: { ...(prev[card.projectId] ?? {}), [card.id]: card },
     }));
+    try {
+      await api.updateCard(card.id, {
+        title: card.title,
+        description: card.description,
+      });
+    } catch {
+      // swallow — optimistic update
+    }
+  }, []);
+
+  const uploadAttachment = useCallback(async (cardId: string, projectId: string, file: File) => {
+    const attachment = await api.uploadAttachment(cardId, file);
+    setCardsByProject((prev) => {
+      const current = prev[projectId]?.[cardId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [projectId]: {
+          ...prev[projectId],
+          [cardId]: {
+            ...current,
+            attachments: [...(current.attachments ?? []), attachment],
+          },
+        },
+      };
+    });
+  }, []);
+
+  const deleteAttachment = useCallback(async (cardId: string, projectId: string, name: string) => {
+    await api.deleteAttachment(cardId, name);
+    setCardsByProject((prev) => {
+      const current = prev[projectId]?.[cardId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [projectId]: {
+          ...prev[projectId],
+          [cardId]: {
+            ...current,
+            attachments: (current.attachments ?? []).filter((a) => a.name !== name),
+          },
+        },
+      };
+    });
   }, []);
 
   const moveCardToColumn = useCallback((cardId: string, toColumnId: string) => {
@@ -161,6 +207,8 @@ export function useProjects(): UseProjectsResult {
     createCardInProject,
     selectCard,
     updateCard,
+    uploadAttachment,
+    deleteAttachment,
     moveCardToColumn,
     setActiveProject,
     refresh,
