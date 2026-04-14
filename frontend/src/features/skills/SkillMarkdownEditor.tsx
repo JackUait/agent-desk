@@ -66,7 +66,7 @@ function MilkdownView({ value, onChange, readOnly }: Props) {
           }
         });
       })
-      .use(nord)
+      .config(nord)
       .use(commonmark)
       .use(gfm)
       .use(listener);
