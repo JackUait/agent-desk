@@ -8,7 +8,15 @@ import (
 
 func newSvc(t *testing.T) *Service {
 	t.Helper()
-	return NewService(NewStore(t.TempDir()), func() int64 { return 100 })
+	return NewServiceWithLimits(NewStore(t.TempDir()), func() int64 { return 100 }, testLimits())
+}
+
+func testLimits() Limits {
+	return Limits{
+		MaxFileBytes:    16,
+		MaxTotalBytes:   64,
+		MaxFilesPerCard: 4,
+	}
 }
 
 func TestUploadSuccess(t *testing.T) {
@@ -30,7 +38,8 @@ func TestUploadSuccess(t *testing.T) {
 
 func TestUploadRejectsOversize(t *testing.T) {
 	s := newSvc(t)
-	big := bytes.NewReader(make([]byte, MaxFileBytes+1))
+	lim := testLimits()
+	big := bytes.NewReader(make([]byte, lim.MaxFileBytes+1))
 	_, err := s.Upload("c1", "big.bin", big)
 	if err == nil {
 		t.Fatalf("expected oversize error")
@@ -42,7 +51,8 @@ func TestUploadRejectsOversize(t *testing.T) {
 
 func TestUploadRejectsAtFileCountCap(t *testing.T) {
 	s := newSvc(t)
-	for i := 0; i < MaxFilesPerCard; i++ {
+	lim := testLimits()
+	for i := 0; i < lim.MaxFilesPerCard; i++ {
 		name := "f" + string(rune('a'+i)) + ".txt"
 		if _, err := s.Upload("c1", name, bytes.NewReader([]byte("x"))); err != nil {
 			t.Fatalf("Upload %d: %v", i, err)
@@ -55,15 +65,18 @@ func TestUploadRejectsAtFileCountCap(t *testing.T) {
 }
 
 func TestUploadRejectsTotalQuota(t *testing.T) {
-	s := newSvc(t)
-	chunk := make([]byte, MaxFileBytes)
-	for i := 0; i < 5; i++ {
+	// Custom limits: allow up to 10 files, 16 bytes each, 64 total.
+	// 4 × 16 = 64 bytes saturates total; next upload of any size must fail.
+	lim := Limits{MaxFileBytes: 16, MaxTotalBytes: 64, MaxFilesPerCard: 10}
+	s := NewServiceWithLimits(NewStore(t.TempDir()), func() int64 { return 100 }, lim)
+	chunk := make([]byte, lim.MaxFileBytes)
+	for i := 0; i < 4; i++ {
 		name := "blob" + string(rune('0'+i)) + ".bin"
 		if _, err := s.Upload("c1", name, bytes.NewReader(chunk)); err != nil {
 			t.Fatalf("Upload %d: %v", i, err)
 		}
 	}
-	_, err := s.Upload("c1", "overflow.bin", bytes.NewReader(chunk))
+	_, err := s.Upload("c1", "overflow.bin", bytes.NewReader([]byte("x")))
 	if err != ErrQuotaExceeded {
 		t.Fatalf("err = %v, want ErrQuotaExceeded", err)
 	}

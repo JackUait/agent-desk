@@ -1,16 +1,31 @@
 package attachment
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
-func TestLimitsAreWhatSpecSays(t *testing.T) {
-	if MaxFileBytes != 10*1024*1024 {
-		t.Fatalf("MaxFileBytes = %d, want %d", MaxFileBytes, 10*1024*1024)
+func TestDefaultLimitsPermitVideo(t *testing.T) {
+	lim := DefaultLimits()
+	const want int64 = 500 * 1024 * 1024
+	if lim.MaxFileBytes != want {
+		t.Fatalf("DefaultLimits().MaxFileBytes = %d, want %d", lim.MaxFileBytes, want)
 	}
-	if MaxFilesPerCard != 20 {
-		t.Fatalf("MaxFilesPerCard = %d, want 20", MaxFilesPerCard)
+	const wantTotal int64 = 2 * 1024 * 1024 * 1024
+	if lim.MaxTotalBytes != wantTotal {
+		t.Fatalf("DefaultLimits().MaxTotalBytes = %d, want %d", lim.MaxTotalBytes, wantTotal)
 	}
-	if MaxTotalBytes != 50*1024*1024 {
-		t.Fatalf("MaxTotalBytes = %d, want %d", MaxTotalBytes, 50*1024*1024)
+	if lim.MaxFilesPerCard != 20 {
+		t.Fatalf("DefaultLimits().MaxFilesPerCard = %d, want 20", lim.MaxFilesPerCard)
+	}
+}
+
+func TestUploadAcceptsElevenMBWithDefaultLimits(t *testing.T) {
+	s := NewService(NewStore(t.TempDir()), func() int64 { return 1 })
+	buf := make([]byte, 11*1024*1024)
+	_, err := s.Upload("c1", "video.mp4", bytes.NewReader(buf))
+	if err != nil {
+		t.Fatalf("Upload 11MB: %v", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package attachment
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"mime"
 	"net/http"
 )
@@ -39,6 +40,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 
 	mr, err := r.MultipartReader()
 	if err != nil {
+		drainBody(r)
 		writeErr(w, http.StatusBadRequest, "multipart parse failed")
 		return
 	}
@@ -47,6 +49,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 	for {
 		part, err := mr.NextPart()
 		if err != nil {
+			drainBody(r)
 			writeErr(w, http.StatusBadRequest, "missing file field")
 			return
 		}
@@ -62,6 +65,7 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 
 		a, upErr := h.svc.Upload(cardID, rawName, part)
 		if upErr != nil {
+			drainBody(r)
 			writeErr(w, statusFor(upErr), upErr.Error())
 			return
 		}
@@ -72,6 +76,16 @@ func (h *Handler) upload(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(a)
 		return
+	}
+}
+
+// drainBody consumes the remaining request body so upstream proxies receive
+// a complete request before the response is written. Without this, clients
+// behind a proxy (like Vite's dev server) see opaque 502s instead of our
+// actual error status on rejected uploads.
+func drainBody(r *http.Request) {
+	if r.Body != nil {
+		_, _ = io.Copy(io.Discard, r.Body)
 	}
 }
 

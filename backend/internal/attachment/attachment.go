@@ -15,7 +15,23 @@ type AttachmentDiff struct {
 }
 
 const (
-	MaxFileBytes    int64 = 10 * 1024 * 1024
+	MaxFileBytes    int64 = 500 * 1024 * 1024
 	MaxFilesPerCard       = 20
-	MaxTotalBytes   int64 = 50 * 1024 * 1024
+	MaxTotalBytes   int64 = 2 * 1024 * 1024 * 1024
 )
+
+// Limits caps the size and count of attachments a Service will accept.
+type Limits struct {
+	MaxFileBytes    int64
+	MaxTotalBytes   int64
+	MaxFilesPerCard int
+}
+
+// DefaultLimits returns the production default caps.
+func DefaultLimits() Limits {
+	return Limits{
+		MaxFileBytes:    MaxFileBytes,
+		MaxTotalBytes:   MaxTotalBytes,
+		MaxFilesPerCard: MaxFilesPerCard,
+	}
+}

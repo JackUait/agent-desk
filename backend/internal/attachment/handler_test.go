@@ -3,6 +3,7 @@ package attachment
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -10,9 +11,17 @@ import (
 	"testing"
 )
 
+func handlerTestLimits() Limits {
+	return Limits{
+		MaxFileBytes:    16,
+		MaxTotalBytes:   64,
+		MaxFilesPerCard: 4,
+	}
+}
+
 func newHandler(t *testing.T) *Handler {
 	t.Helper()
-	svc := NewService(NewStore(t.TempDir()), func() int64 { return 1 })
+	svc := NewServiceWithLimits(NewStore(t.TempDir()), func() int64 { return 1 }, handlerTestLimits())
 	return NewHandler(svc)
 }
 
@@ -57,7 +66,7 @@ func TestHandlerUploadTooLarge(t *testing.T) {
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
 
-	big := strings.Repeat("x", int(MaxFileBytes+1))
+	big := strings.Repeat("x", int(handlerTestLimits().MaxFileBytes+1))
 	body, ct := multipartUpload(t, "big.bin", big)
 	req := httptest.NewRequest("POST", "/api/cards/abc/attachments", body)
 	req.Header.Set("Content-Type", ct)
@@ -66,6 +75,50 @@ func TestHandlerUploadTooLarge(t *testing.T) {
 
 	if rr.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want 413", rr.Code)
+	}
+}
+
+// countReader tracks how many bytes were read from the underlying reader.
+type countReader struct {
+	r io.Reader
+	n int64
+}
+
+func (c *countReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n += int64(n)
+	return n, err
+}
+
+// TestHandlerDrainsBodyOnTooLarge verifies the handler fully consumes the
+// request body before responding with an error. If it doesn't, upstream
+// proxies (e.g. Vite's dev proxy) see a premature connection close and turn
+// a clean 413 into an opaque 502 Bad Gateway for the browser.
+func TestHandlerDrainsBodyOnTooLarge(t *testing.T) {
+	h := newHandler(t)
+	mux := http.NewServeMux()
+	h.RegisterRoutes(mux)
+
+	// Body much larger than bufio default read-ahead (4096) so an un-drained
+	// handler leaves meaningful bytes in the underlying reader.
+	big := strings.Repeat("x", int(handlerTestLimits().MaxFileBytes+1))
+	body, ct := multipartUpload(t, "big.bin", big)
+	// Pad the multipart so total body >> bufio read-ahead.
+	padding := strings.Repeat("y", 32*1024)
+	body.WriteString(padding)
+
+	totalSize := int64(body.Len())
+	counter := &countReader{r: body}
+	req := httptest.NewRequest("POST", "/api/cards/abc/attachments", counter)
+	req.Header.Set("Content-Type", ct)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", rr.Code)
+	}
+	if counter.n != totalSize {
+		t.Fatalf("handler consumed %d of %d body bytes; request body not drained", counter.n, totalSize)
 	}
 }
 

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { AlertTriangle, XIcon } from "lucide-react";
 import type { Attachment } from "../../shared/types/domain";
 import { AttachmentTile } from "./AttachmentTile";
 import { AttachmentLightbox } from "./AttachmentLightbox";
@@ -78,7 +79,23 @@ export function AttachmentList({ cardId, attachments, onUpload, onDelete, hrefFo
           if (fileInput.current) fileInput.current.value = "";
         }}
       />
-      {error && <div role="alert" className="text-[11px] text-accent-red">{error}</div>}
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-accent-red/40 bg-accent-red/10 px-3 py-2 text-[12px] text-accent-red"
+        >
+          <AlertTriangle width={14} height={14} className="mt-[1px] shrink-0" />
+          <span className="flex-1 break-words">{error}</span>
+          <button
+            type="button"
+            aria-label="Dismiss error"
+            onClick={() => setError(null)}
+            className="shrink-0 rounded-sm p-0.5 text-accent-red/70 transition hover:bg-accent-red/10 hover:text-accent-red"
+          >
+            <XIcon width={13} height={13} />
+          </button>
+        </div>
+      )}
 
       <AttachmentLightbox
         attachment={openAttachment}

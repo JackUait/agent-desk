@@ -17,12 +17,17 @@ type NowFunc func() int64
 
 // Service is the upload/list/read/delete policy layer above Store.
 type Service struct {
-	store *Store
-	now   NowFunc
+	store  *Store
+	now    NowFunc
+	limits Limits
 }
 
 func NewService(store *Store, now NowFunc) *Service {
-	return &Service{store: store, now: now}
+	return NewServiceWithLimits(store, now, DefaultLimits())
+}
+
+func NewServiceWithLimits(store *Store, now NowFunc, lim Limits) *Service {
+	return &Service{store: store, now: now, limits: lim}
 }
 
 // Upload reads r in full, enforces limits, stores the bytes, and returns the
@@ -32,12 +37,12 @@ func (s *Service) Upload(cardID, name string, r io.Reader) (Attachment, error) {
 		return Attachment{}, ErrInvalidName
 	}
 
-	limited := io.LimitReader(r, MaxFileBytes+1)
+	limited := io.LimitReader(r, s.limits.MaxFileBytes+1)
 	buf, err := io.ReadAll(limited)
 	if err != nil {
 		return Attachment{}, err
 	}
-	if int64(len(buf)) > MaxFileBytes {
+	if int64(len(buf)) > s.limits.MaxFileBytes {
 		return Attachment{}, ErrFileTooLarge
 	}
 
@@ -45,14 +50,14 @@ func (s *Service) Upload(cardID, name string, r io.Reader) (Attachment, error) {
 	if err != nil {
 		return Attachment{}, err
 	}
-	if len(existing) >= MaxFilesPerCard {
+	if len(existing) >= s.limits.MaxFilesPerCard {
 		return Attachment{}, ErrTooManyFiles
 	}
 	var total int64
 	for _, e := range existing {
 		total += e.Size
 	}
-	if total+int64(len(buf)) > MaxTotalBytes {
+	if total+int64(len(buf)) > s.limits.MaxTotalBytes {
 		return Attachment{}, ErrQuotaExceeded
 	}
 
