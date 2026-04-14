@@ -10,6 +10,20 @@ const TEXT_MIME_EXACT = new Set([
   "application/yaml",
 ]);
 
+const IMAGE_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif", "heic", "heif",
+]);
+
+const VIDEO_EXTENSIONS = new Set([
+  "mp4", "mov", "webm", "mkv", "avi", "m4v", "mpg", "mpeg", "ogv", "qt", "3gp",
+]);
+
+const AUDIO_EXTENSIONS = new Set([
+  "mp3", "wav", "flac", "ogg", "oga", "m4a", "aac", "opus", "wma",
+]);
+
+const PDF_EXTENSIONS = new Set(["pdf"]);
+
 const TEXT_EXTENSIONS = new Set([
   "txt", "md", "markdown", "json", "yaml", "yml", "toml", "ini", "cfg",
   "js", "jsx", "ts", "tsx", "mjs", "cjs",
@@ -40,6 +54,10 @@ export function mimeCategory(mime: string, name?: string): MimeCategory {
 
   if (m === "" || m === "application/octet-stream") {
     const ext = extOf(name);
+    if (IMAGE_EXTENSIONS.has(ext)) return "image";
+    if (VIDEO_EXTENSIONS.has(ext)) return "video";
+    if (AUDIO_EXTENSIONS.has(ext)) return "audio";
+    if (PDF_EXTENSIONS.has(ext)) return "pdf";
     if (TEXT_EXTENSIONS.has(ext)) return "text";
   }
 

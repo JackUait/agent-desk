@@ -82,6 +82,42 @@ func TestUploadRejectsTotalQuota(t *testing.T) {
 	}
 }
 
+func TestUploadFallsBackToExtensionWhenSniffOctetStream(t *testing.T) {
+	s := newSvc(t)
+	// 16 bytes of zeros sniff as application/octet-stream.
+	a, err := s.Upload("c1", "clip.mov", bytes.NewReader(make([]byte, 16)))
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if !strings.HasPrefix(a.MIMEType, "video/") {
+		t.Fatalf("MIMEType = %q, want video/*", a.MIMEType)
+	}
+}
+
+func TestReadRecoversMIMEByExtensionForLegacyOctetStream(t *testing.T) {
+	store := NewStore(t.TempDir())
+	s := NewServiceWithLimits(store, func() int64 { return 1 }, DefaultLimits())
+	// Simulate a legacy entry stored before the upload-time mime fix: the
+	// manifest records application/octet-stream even though the filename
+	// has a video extension.
+	legacy := Attachment{
+		Name:       "old.mov",
+		Size:       3,
+		MIMEType:   "application/octet-stream",
+		UploadedAt: 1,
+	}
+	if err := store.Put("c1", legacy, []byte("xyz")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	_, m, err := s.Read("c1", "old.mov")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if !strings.HasPrefix(m, "video/") {
+		t.Fatalf("Read mime = %q, want video/*", m)
+	}
+}
+
 func TestUploadSanitizesTraversal(t *testing.T) {
 	s := newSvc(t)
 	_, err := s.Upload("c1", "../escape.txt", bytes.NewReader([]byte("x")))

@@ -45,4 +45,24 @@ describe("mimeCategory", () => {
   it("classifies zip as other", () => {
     expect(mimeCategory("application/zip")).toBe("other");
   });
+
+  it("falls back to extension for video octet-stream", () => {
+    expect(mimeCategory("application/octet-stream", "clip.mov")).toBe("video");
+    expect(mimeCategory("application/octet-stream", "clip.mp4")).toBe("video");
+    expect(mimeCategory("application/octet-stream", "clip.webm")).toBe("video");
+  });
+
+  it("falls back to extension for image octet-stream", () => {
+    expect(mimeCategory("application/octet-stream", "pic.png")).toBe("image");
+    expect(mimeCategory("application/octet-stream", "pic.jpg")).toBe("image");
+  });
+
+  it("falls back to extension for audio octet-stream", () => {
+    expect(mimeCategory("application/octet-stream", "track.mp3")).toBe("audio");
+    expect(mimeCategory("application/octet-stream", "track.wav")).toBe("audio");
+  });
+
+  it("falls back to extension for pdf octet-stream", () => {
+    expect(mimeCategory("application/octet-stream", "doc.pdf")).toBe("pdf");
+  });
 });

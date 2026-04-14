@@ -3,7 +3,10 @@ package attachment
 import (
 	"errors"
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
+	"strings"
 )
 
 var (
@@ -61,11 +64,10 @@ func (s *Service) Upload(cardID, name string, r io.Reader) (Attachment, error) {
 		return Attachment{}, ErrQuotaExceeded
 	}
 
-	mime := http.DetectContentType(buf)
 	a := Attachment{
 		Name:       name,
 		Size:       int64(len(buf)),
-		MIMEType:   mime,
+		MIMEType:   detectMIME(name, buf),
 		UploadedAt: s.now(),
 	}
 	if putErr := s.store.Put(cardID, a, buf); putErr != nil {
@@ -74,12 +76,59 @@ func (s *Service) Upload(cardID, name string, r io.Reader) (Attachment, error) {
 	return a, nil
 }
 
+// detectMIME prefers content sniffing, but falls back to the filename
+// extension when sniffing yields a generic octet-stream — common for
+// QuickTime/MP4 variants the stdlib sniffer doesn't recognize.
+func detectMIME(name string, buf []byte) string {
+	sniffed := http.DetectContentType(buf)
+	if sniffed != "application/octet-stream" {
+		return sniffed
+	}
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext == "" {
+		return sniffed
+	}
+	if byExt := mime.TypeByExtension(ext); byExt != "" {
+		if semi := strings.IndexByte(byExt, ';'); semi != -1 {
+			byExt = strings.TrimSpace(byExt[:semi])
+		}
+		return byExt
+	}
+	return sniffed
+}
+
 func (s *Service) List(cardID string) ([]Attachment, error) {
 	return s.store.List(cardID)
 }
 
 func (s *Service) Read(cardID, name string) ([]byte, string, error) {
-	return s.store.Read(cardID, name)
+	data, m, err := s.store.Read(cardID, name)
+	if err != nil {
+		return nil, "", err
+	}
+	if m == "" || m == "application/octet-stream" {
+		if recovered := mimeByExtension(name); recovered != "" {
+			m = recovered
+		} else {
+			m = detectMIME(name, data)
+		}
+	}
+	return data, m, nil
+}
+
+func mimeByExtension(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
+	if ext == "" {
+		return ""
+	}
+	t := mime.TypeByExtension(ext)
+	if t == "" {
+		return ""
+	}
+	if semi := strings.IndexByte(t, ';'); semi != -1 {
+		t = strings.TrimSpace(t[:semi])
+	}
+	return t
 }
 
 func (s *Service) Delete(cardID, name string) error {
