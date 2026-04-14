@@ -59,6 +59,15 @@ function CardModalWrapper({
     }
   }, [currentColumn]);
 
+  const cardRef = useRef(card);
+  cardRef.current = card;
+  const updateCardRef = useRef(updateCard);
+  updateCardRef.current = updateCard;
+  useEffect(() => {
+    if (Object.keys(cardUpdates).length === 0) return;
+    updateCardRef.current({ ...cardRef.current, ...cardUpdates });
+  }, [cardUpdates]);
+
   return (
     <CardModal
       card={mergedCard}
