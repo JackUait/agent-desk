@@ -7,7 +7,7 @@ const ProjectsPage = lazy(() =>
 
 export function AppRoutes() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="flex h-screen w-full items-center justify-center bg-bg-page text-[13px] text-text-muted">Loading…</div>}>
       <Routes>
         <Route path="/" element={<ProjectsPage />} />
       </Routes>
