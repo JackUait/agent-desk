@@ -291,6 +291,50 @@ func TestSetModel_unknownCard(t *testing.T) {
 	}
 }
 
+// --- SetEffort ---
+
+func TestSetEffort_HappyPath(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+	c := svc.CreateCard("proj-1", "Card")
+
+	updated, err := svc.SetEffort(c.ID, "high")
+	if err != nil {
+		t.Fatalf("SetEffort: unexpected error: %v", err)
+	}
+	if updated.Effort != "high" {
+		t.Errorf("returned Effort = %q, want %q", updated.Effort, "high")
+	}
+	got, _ := svc.GetCard(c.ID)
+	if got.Effort != "high" {
+		t.Errorf("persisted Effort = %q, want %q", got.Effort, "high")
+	}
+}
+
+func TestSetEffort_UnknownEffortRejected(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+	c := svc.CreateCard("proj-1", "Card")
+
+	_, err := svc.SetEffort(c.ID, "ultra")
+	if err == nil {
+		t.Fatalf("SetEffort(ultra): expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown effort") {
+		t.Errorf("error = %q, want containing %q", err.Error(), "unknown effort")
+	}
+}
+
+func TestSetEffort_UnknownCardRejected(t *testing.T) {
+	store := NewStore()
+	svc := NewService(store)
+
+	_, err := svc.SetEffort("no-such-card", "low")
+	if err == nil {
+		t.Fatalf("SetEffort(missing card): expected error, got nil")
+	}
+}
+
 // --- UpdateFields ---
 
 func TestUpdateFields_strings(t *testing.T) {

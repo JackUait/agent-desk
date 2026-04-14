@@ -19,6 +19,7 @@ type Card struct {
 	Complexity         string   `json:"complexity"`
 	RelevantFiles      []string `json:"relevantFiles"`
 	Model              string   `json:"model"`
+	Effort             string   `json:"effort"`
 	SessionID          string   `json:"sessionId"`
 	WorktreePath       string   `json:"worktreePath"`
 	BranchName         string   `json:"branchName"`

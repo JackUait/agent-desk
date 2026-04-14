@@ -177,6 +177,22 @@ func (s *Service) SetModel(id, model string) (Card, error) {
 	return c, nil
 }
 
+// SetEffort validates effort against agent.AllowedEfforts and persists it on
+// the card. Returns an error containing "unknown effort" when the value is
+// not in the registry, or an error when the card cannot be found.
+func (s *Service) SetEffort(id, effort string) (Card, error) {
+	if !agent.IsAllowedEffort(effort) {
+		return Card{}, fmt.Errorf("unknown effort: %s", effort)
+	}
+	c, err := s.GetCard(id)
+	if err != nil {
+		return Card{}, err
+	}
+	c.Effort = effort
+	s.store.Update(c)
+	return c, nil
+}
+
 // AppendMessage persists a message on a card.
 func (s *Service) AppendMessage(cardID string, msg domain.Message) error {
 	if !s.store.AppendMessage(cardID, msg) {
