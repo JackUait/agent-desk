@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 )
 
 type Git interface {
@@ -29,7 +30,6 @@ type Store struct {
 	mu       sync.RWMutex
 	git      Git
 	projects map[string]Project
-	seq      int64
 }
 
 func NewStore(git Git) *Store {
@@ -49,13 +49,12 @@ func (s *Store) Create(path string) (Project, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.seq++
 	p := Project{
 		ID:        newID(),
 		Title:     filepath.Base(path),
 		Path:      path,
 		ColorIdx:  len(s.projects) % ColorPaletteSize,
-		CreatedAt: s.seq,
+		CreatedAt: time.Now().Unix(),
 	}
 	s.projects[p.ID] = p
 	return p, nil

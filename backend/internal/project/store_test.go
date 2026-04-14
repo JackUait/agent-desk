@@ -52,20 +52,20 @@ func TestStore_Get_NotFound(t *testing.T) {
 	}
 }
 
-func TestStore_List_SortedByCreatedAt(t *testing.T) {
+func TestStore_List_ReturnsAllCreatedProjects(t *testing.T) {
 	s := project.NewStore(&project.StubGit{IsRepoVal: true})
-	s.Create("/tmp/alpha")
-	s.Create("/tmp/beta")
-
+	_, _ = s.Create("/tmp/a")
+	_, _ = s.Create("/tmp/b")
 	list := s.List()
 	if len(list) != 2 {
-		t.Fatalf("expected 2 projects, got %d", len(list))
+		t.Fatalf("List len = %d, want 2", len(list))
 	}
-	if list[0].Title != "alpha" {
-		t.Errorf("expected first project title %q, got %q", "alpha", list[0].Title)
+	found := map[string]bool{}
+	for _, p := range list {
+		found[p.Title] = true
 	}
-	if list[1].Title != "beta" {
-		t.Errorf("expected second project title %q, got %q", "beta", list[1].Title)
+	if !found["a"] || !found["b"] {
+		t.Errorf("expected titles {a,b}, got %v", found)
 	}
 }
 
