@@ -61,15 +61,35 @@ export function SkillsDialog({ open, scope, onClose }: Props) {
 
   useEffect(() => {
     if (!open || !isSidePeek) return;
-    const handler = (event: MouseEvent) => {
+    const SAFE_SELECTOR =
+      '[data-testid="skills-preview-root"],[data-sidepeek-safe]';
+    // mousedown runs before React flushes state updates, so the target is
+    // still attached to the panel even for buttons that unmount during their
+    // own onClick (Revert, DeleteSkillConfirm actions, NewSkillDialog submit).
+    // Without this, the subsequent click bubbles to document with a detached
+    // target and `closest()` misclassifies the in-panel interaction as
+    // "outside", closing the panel.
+    let startedInside = false;
+    const onDown = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-testid="skills-preview-root"]')) return;
-      if (target.closest("[data-sidepeek-safe]")) return;
+      startedInside =
+        target instanceof Element && !!target.closest(SAFE_SELECTOR);
+    };
+    const onClick = (event: MouseEvent) => {
+      if (startedInside) {
+        startedInside = false;
+        return;
+      }
+      const target = event.target;
+      if (target instanceof Element && target.closest(SAFE_SELECTOR)) return;
       attemptCloseRef.current();
     };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("click", onClick);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("click", onClick);
+    };
   }, [open, isSidePeek]);
 
   if (!open) return null;

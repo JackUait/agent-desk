@@ -248,6 +248,63 @@ describe("SkillsDialog", () => {
     confirmSpy.mockRestore();
   });
 
+  it("side-peek: a click whose target was detached from the panel between mousedown and click does not close the panel", async () => {
+    // Regression test for: clicking a conditional button inside the panel
+    // (e.g., Revert, DeleteSkillConfirm actions, NewSkillDialog submit) caused
+    // the side-peek to close. React 18 synchronously flushes state updates
+    // during a discrete event handler, so the button unmounts before the
+    // native click bubbles to the document listener. At that point
+    // `target.closest('[data-testid=skills-preview-root]')` returns null and
+    // the handler misclassifies the in-panel interaction as "outside".
+    //
+    // jsdom + RTL's fireEvent does not reproduce React 18's intra-event flush
+    // timing, so we simulate the same DOM state directly: dispatch mousedown
+    // while the button is inside the panel, then move it out of the panel
+    // (mimicking the React unmount + re-host that happens in the browser),
+    // then dispatch click. A correct handler captures startedInside on
+    // mousedown and ignores the subsequent click regardless of where the
+    // target ended up.
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ previewMode: "side-peek" }),
+    );
+    __resetSettingsForTests();
+    mocked.list.mockResolvedValue({
+      items: [
+        { id: "1", kind: "skill", name: "alpha", description: "", source: "user", readOnly: false, path: "/a/SKILL.md" },
+      ],
+    });
+    mocked.readContent.mockResolvedValue({ path: "/a/SKILL.md", body: "hi", frontmatter: {} });
+    const onClose = vi.fn();
+    // In the real browser scenario, by the time the document listener fires,
+    // React has already flushed Revert's onClick — `isDirty` is false again,
+    // so attemptClose calls onClose directly without prompting. Mirror that
+    // here by stubbing confirm to "discard"; we want the test to fail on the
+    // closest-mismatch bug, not on a missing jsdom impl.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<SkillsDialog open scope={{ kind: "global" }} onClose={onClose} />);
+    await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("alpha"));
+    await waitFor(() => expect(screen.getByLabelText("body")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("body"), { target: { value: "changed" } });
+    const revertBtn = screen.getByRole("button", { name: /revert/i });
+    // Sanity: button is currently inside the panel.
+    expect(revertBtn.closest('[data-testid="skills-preview-root"]')).not.toBeNull();
+    // Press inside the panel.
+    fireEvent.mouseDown(revertBtn);
+    // Simulate React's sync unmount + the browser's bubble path: detach from
+    // the panel and re-host on document.body so the click can still bubble to
+    // the document listener.
+    revertBtn.remove();
+    document.body.appendChild(revertBtn);
+    expect(revertBtn.closest('[data-testid="skills-preview-root"]')).toBeNull();
+    // Release the click on the now-detached-from-panel button.
+    fireEvent.click(revertBtn);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("skills-preview-root")).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
   it("dirty-close shows confirm", async () => {
     mocked.list.mockResolvedValue({
       items: [
