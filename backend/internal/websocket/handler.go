@@ -313,6 +313,8 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 	stopReason := ""
 	inputTokens := 0
 	outputTokens := 0
+	cacheReadTokens := 0
+	cacheCreationTokens := 0
 	emittedTools := make(map[string]bool)
 
 	broadcast := func(payload map[string]any) {
@@ -335,6 +337,8 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			stopReason = ""
 			inputTokens = 0
 			outputTokens = 0
+			cacheReadTokens = 0
+			cacheCreationTokens = 0
 			emittedTools = make(map[string]bool)
 
 			broadcast(map[string]any{
@@ -439,6 +443,12 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			if ev.OutputTokens != 0 {
 				outputTokens = ev.OutputTokens
 			}
+			if ev.CacheReadTokens != 0 {
+				cacheReadTokens = ev.CacheReadTokens
+			}
+			if ev.CacheCreationTokens != 0 {
+				cacheCreationTokens = ev.CacheCreationTokens
+			}
 
 		case agent.EventToolResult:
 			broadcast(map[string]any{
@@ -457,13 +467,21 @@ func (h *Handler) StartEventBridge(cardID string, events <-chan agent.StreamEven
 			if ev.OutputTokens != 0 {
 				outputTokens = ev.OutputTokens
 			}
+			if ev.CacheReadTokens != 0 {
+				cacheReadTokens = ev.CacheReadTokens
+			}
+			if ev.CacheCreationTokens != 0 {
+				cacheCreationTokens = ev.CacheCreationTokens
+			}
 			broadcast(map[string]any{
-				"type":         "turn_end",
-				"durationMs":   ev.DurationMS,
-				"costUsd":      ev.CostUSD,
-				"inputTokens":  inputTokens,
-				"outputTokens": outputTokens,
-				"stopReason":   stopReason,
+				"type":                "turn_end",
+				"durationMs":          ev.DurationMS,
+				"costUsd":             ev.CostUSD,
+				"inputTokens":         inputTokens,
+				"outputTokens":        outputTokens,
+				"cacheReadTokens":     cacheReadTokens,
+				"cacheCreationTokens": cacheCreationTokens,
+				"stopReason":          stopReason,
 			})
 		}
 	}

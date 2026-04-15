@@ -27,6 +27,8 @@ export type ChatStreamFrame =
       costUsd: number;
       inputTokens: number;
       outputTokens: number;
+      cacheReadTokens?: number;
+      cacheCreationTokens?: number;
       stopReason: string;
     };
 
@@ -51,6 +53,8 @@ export type ChatTurn = {
     costUsd: number;
     inputTokens: number;
     outputTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
     stopReason: string;
   };
   status: "streaming" | "done";
@@ -250,6 +254,8 @@ export function chatStreamReducer(
           costUsd: frame.costUsd,
           inputTokens: frame.inputTokens,
           outputTokens: frame.outputTokens,
+          cacheReadTokens: frame.cacheReadTokens ?? 0,
+          cacheCreationTokens: frame.cacheCreationTokens ?? 0,
           stopReason: frame.stopReason,
         },
       }));

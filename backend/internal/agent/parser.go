@@ -43,8 +43,10 @@ type StreamEvent struct {
 	StopReason   string
 	DurationMS   int
 	CostUSD      float64
-	InputTokens  int
-	OutputTokens int
+	InputTokens         int
+	OutputTokens        int
+	CacheReadTokens     int
+	CacheCreationTokens int
 }
 
 type rawLine struct {
@@ -62,8 +64,21 @@ type rawLine struct {
 }
 
 type rawUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+}
+
+// totalInput folds cache_read + cache_creation into input_tokens so
+// prompt-cached context still counts toward the per-turn context size.
+// Without cache folding the visible "input_tokens" reflects only the
+// fresh portion of the prompt and drastically underreports real usage.
+func (u *rawUsage) totalInput() int {
+	if u == nil {
+		return 0
+	}
+	return u.InputTokens + u.CacheReadInputTokens + u.CacheCreationInputTokens
 }
 
 type rawAssistantMessage struct {
@@ -178,8 +193,10 @@ func ParseStreamEvent(line string) (StreamEvent, error) {
 		ev.DurationMS = envelope.DurationMS
 		ev.CostUSD = envelope.CostUSD
 		if envelope.Usage != nil {
-			ev.InputTokens = envelope.Usage.InputTokens
+			ev.InputTokens = envelope.Usage.totalInput()
 			ev.OutputTokens = envelope.Usage.OutputTokens
+			ev.CacheReadTokens = envelope.Usage.CacheReadInputTokens
+			ev.CacheCreationTokens = envelope.Usage.CacheCreationInputTokens
 		}
 		return ev, nil
 
@@ -262,8 +279,10 @@ func parseStreamEventInner(ev StreamEvent, raw json.RawMessage) (StreamEvent, er
 			ev.StopReason = inner.Delta.StopReason
 		}
 		if inner.Usage != nil {
-			ev.InputTokens = inner.Usage.InputTokens
+			ev.InputTokens = inner.Usage.totalInput()
 			ev.OutputTokens = inner.Usage.OutputTokens
+			ev.CacheReadTokens = inner.Usage.CacheReadInputTokens
+			ev.CacheCreationTokens = inner.Usage.CacheCreationInputTokens
 		}
 		return ev, nil
 

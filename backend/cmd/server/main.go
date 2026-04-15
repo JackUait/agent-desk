@@ -15,6 +15,7 @@ import (
 	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/board"
 	"github.com/jackuait/agent-desk/backend/internal/card"
+	"github.com/jackuait/agent-desk/backend/internal/contextusage"
 	"github.com/jackuait/agent-desk/backend/internal/mcp"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/skills"
@@ -31,6 +32,16 @@ type projectCascade struct {
 func (c *projectCascade) DeleteByProject(projectID string) {
 	c.cardSvc.DeleteByProject(projectID)
 	c.worktreeMgr.Remove(projectID)
+}
+
+type projectPathAdapter struct{ store *project.Store }
+
+func (p projectPathAdapter) ProjectPath(id string) (string, bool) {
+	pr, ok := p.store.Get(id)
+	if !ok {
+		return "", false
+	}
+	return pr.Path, true
 }
 
 func main() {
@@ -88,6 +99,13 @@ func main() {
 
 	skillsHandler := skills.NewHandler(projectStore)
 	skillsHandler.RegisterRoutes(mux)
+
+	ctxUsageHandler := contextusage.NewHandler(
+		&contextusage.Runner{ClaudeBin: "claude"},
+		projectPathAdapter{store: projectStore},
+		func(_ string) string { return "" },
+	)
+	ctxUsageHandler.RegisterRoutes(mux)
 
 	server := &http.Server{
 		Addr:         ":8080",

@@ -28,6 +28,8 @@ function streamWithText(text: string, done = true): ChatStreamState {
                 costUsd: 0.0123,
                 inputTokens: 10,
                 outputTokens: 42,
+                cacheReadTokens: 0,
+                cacheCreationTokens: 0,
                 stopReason: "end_turn",
               },
             }
@@ -132,6 +134,8 @@ describe("ChatPanel basics", () => {
             costUsd: 0.001,
             inputTokens: 1,
             outputTokens: 2,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
             stopReason: "end_turn",
           },
         },

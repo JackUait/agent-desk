@@ -304,6 +304,36 @@ func TestParseStreamEvent_StreamEvent_MessageDelta_EmitsMessageDelta(t *testing.
 	}
 }
 
+func TestParseStreamEvent_MessageDelta_CacheTokensFoldedIntoInputTokens(t *testing.T) {
+	line := `{"type":"stream_event","event":{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":26,"output_tokens":10,"cache_read_input_tokens":14000,"cache_creation_input_tokens":500}},"session_id":"s"}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.InputTokens != 26+14000+500 {
+		t.Errorf("expected cache-inclusive InputTokens %d, got %d", 26+14000+500, ev.InputTokens)
+	}
+	if ev.CacheReadTokens != 14000 {
+		t.Errorf("expected CacheReadTokens 14000, got %d", ev.CacheReadTokens)
+	}
+	if ev.CacheCreationTokens != 500 {
+		t.Errorf("expected CacheCreationTokens 500, got %d", ev.CacheCreationTokens)
+	}
+}
+
+func TestParseStreamEvent_Result_CacheTokensFoldedIntoInputTokens(t *testing.T) {
+	line := `{"type":"result","subtype":"success","duration_ms":10,"total_cost_usd":0.01,"session_id":"s","usage":{"input_tokens":26,"output_tokens":10,"cache_read_input_tokens":14000,"cache_creation_input_tokens":500}}`
+
+	ev, err := agent.ParseStreamEvent(line)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ev.InputTokens != 26+14000+500 {
+		t.Errorf("expected cache-inclusive InputTokens %d, got %d", 26+14000+500, ev.InputTokens)
+	}
+}
+
 func TestParseStreamEvent_StreamEvent_MessageStop_Unknown(t *testing.T) {
 	line := `{"type":"stream_event","event":{"type":"message_stop"},"session_id":"s"}`
 

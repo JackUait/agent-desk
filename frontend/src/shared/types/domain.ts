@@ -108,5 +108,7 @@ export type WSServerMessage =
       costUsd: number;
       inputTokens: number;
       outputTokens: number;
+      cacheReadTokens?: number;
+      cacheCreationTokens?: number;
       stopReason: string;
     };

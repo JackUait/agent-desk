@@ -1,12 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronsRight } from "lucide-react";
 import type { Card, Message, Model } from "../../shared/types/domain";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { ChatPanel } from "../chat";
 import type { ChatStreamState } from "../chat";
-import { CardContent } from "./CardContent";
+import { CardContent, type ContextBreakdown } from "./CardContent";
 import { Dialog } from "@/components/ui/dialog";
 import type { PreviewMode } from "../settings";
+import { api, type ContextUsage } from "../../shared/api/client";
 import {
   requestSidePeek,
   releaseSidePeek,
@@ -29,6 +30,44 @@ interface CardModalProps {
   onUpload: (file: File) => Promise<void>;
   onDeleteAttachment: (name: string) => Promise<void>;
   previewMode?: PreviewMode;
+}
+
+function peakSessionContext(stream: ChatStreamState): number {
+  let peak = 0;
+  for (const turn of stream.turns) {
+    const m = turn.metrics;
+    if (!m) continue;
+    const total = m.inputTokens + m.outputTokens;
+    if (total > peak) peak = total;
+  }
+  return peak;
+}
+
+function deriveContextBreakdown(stream: ChatStreamState): ContextBreakdown | undefined {
+  let peakInput = 0;
+  let minInput = Number.POSITIVE_INFINITY;
+  let peakMetrics: NonNullable<ChatStreamState["turns"][number]["metrics"]> | null = null;
+  let turnCount = 0;
+  for (const turn of stream.turns) {
+    const m = turn.metrics;
+    if (!m) continue;
+    turnCount++;
+    if (m.inputTokens < minInput) minInput = m.inputTokens;
+    if (m.inputTokens >= peakInput) {
+      peakInput = m.inputTokens;
+      peakMetrics = m;
+    }
+  }
+  if (!peakMetrics || minInput === Number.POSITIVE_INFINITY) return undefined;
+  const baseline = minInput;
+  const conversation = Math.max(0, peakInput - baseline);
+  return {
+    baseline,
+    conversation,
+    cacheRead: peakMetrics.cacheReadTokens ?? 0,
+    output: peakMetrics.outputTokens,
+    turnCount,
+  };
 }
 
 const MODAL_POPUP_CLASS =
@@ -59,6 +98,17 @@ export function CardModal({
   const isSidePeek = previewMode === "side-peek";
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  const [deepBreakdown, setDeepBreakdown] = useState<ContextUsage | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    if (!card.projectId || typeof api.getContextUsage !== "function") return;
+    Promise.resolve()
+      .then(() => api.getContextUsage(card.projectId))
+      .then((usage) => { if (!cancelled) setDeepBreakdown(usage); })
+      .catch(() => { if (!cancelled) setDeepBreakdown(undefined); });
+    return () => { cancelled = true; };
+  }, [card.projectId]);
 
   useEffect(() => {
     if (!isSidePeek) return;
@@ -133,6 +183,9 @@ export function CardModal({
             <CardContent
               card={card}
               projectTitle={projectTitle}
+              contextTokens={peakSessionContext(chatStream)}
+              contextBreakdown={deriveContextBreakdown(chatStream)}
+              deepBreakdown={deepBreakdown}
               onApprove={onApprove}
               onMerge={onMerge}
               onUpdate={onUpdate}

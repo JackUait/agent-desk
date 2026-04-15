@@ -74,6 +74,57 @@ describe("CardModal", () => {
     expect(screen.getByTestId("chat-panel")).toBeInTheDocument();
   });
 
+  it("shows peak session context across all turns", () => {
+    const mk = (i: number, o: number) => ({
+      sessionId: "s",
+      blocks: [],
+      status: "done" as const,
+      metrics: {
+        durationMs: 1,
+        costUsd: 0,
+        inputTokens: i,
+        outputTokens: o,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        stopReason: "end_turn",
+      },
+    });
+    renderModal({
+      chatStream: {
+        turnInFlight: false,
+        turns: [mk(3000, 200), mk(15200, 500), mk(8000, 100)],
+      },
+    });
+    expect(screen.getByTestId("context-usage")).toHaveTextContent(/15\.7k/);
+  });
+
+  it("passes context breakdown with baseline=min and conversation=delta", async () => {
+    const mk = (i: number, o: number) => ({
+      sessionId: "s",
+      blocks: [],
+      status: "done" as const,
+      metrics: {
+        durationMs: 1,
+        costUsd: 0,
+        inputTokens: i,
+        outputTokens: o,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        stopReason: "end_turn",
+      },
+    });
+    renderModal({
+      chatStream: {
+        turnInFlight: false,
+        turns: [mk(80700, 200), mk(83700, 400)],
+      },
+    });
+    const panel = screen.getByTestId("context-breakdown");
+    expect(panel).toHaveTextContent(/80\.7k/);
+    expect(panel).toHaveTextContent(/3\.0k/);
+    expect(panel).toHaveTextContent(/2 turns/i);
+  });
+
   it("renders the model chooser inside the modal", () => {
     renderModal();
     expect(screen.getByTestId("model-chooser")).toBeInTheDocument();

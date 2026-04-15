@@ -90,4 +90,24 @@ export const api = {
   attachmentUrl(id: string, name: string): string {
     return `/api/cards/${id}/attachments/${encodeURIComponent(name)}`;
   },
+  getContextUsage(projectId: string): Promise<ContextUsage> {
+    return request<ContextUsage>(
+      `/agent/context-usage?projectId=${encodeURIComponent(projectId)}`,
+    );
+  },
 };
+
+export interface ContextUsage {
+  totalTokens: number;
+  contextWindowTokens: number;
+  systemPromptTokens: number;
+  systemToolsTokens: number;
+  mcpToolsTokens: number;
+  systemToolsDeferredTokens: number;
+  customAgentsTokens: number;
+  memoryFilesTokens: number;
+  skillsTokens: number;
+  messagesTokens: number;
+  freeSpaceTokens: number;
+  autocompactBufferTokens: number;
+}

@@ -304,4 +304,104 @@ describe("CardContent new fields", () => {
     );
     expect(screen.getByTestId("updated-at")).toHaveTextContent(/updated\s+\d+s\s+ago/);
   });
+
+  it("renders branch name when set", () => {
+    render(
+      <CardContent
+        card={{ ...base, branchName: "feat/context-meter" }}
+        {...noopCardHandlers}
+      />,
+    );
+    const el = screen.getByTestId("branch-name");
+    expect(el).toHaveTextContent("feat/context-meter");
+  });
+
+  it("omits branch name when empty", () => {
+    render(<CardContent card={{ ...base, branchName: "" }} {...noopCardHandlers} />);
+    expect(screen.queryByTestId("branch-name")).not.toBeInTheDocument();
+  });
+
+  it("renders context usage when contextTokens > 0", () => {
+    render(
+      <CardContent
+        card={base}
+        contextTokens={12400}
+        {...noopCardHandlers}
+      />,
+    );
+    const meter = screen.getByTestId("context-usage");
+    expect(meter).toHaveTextContent(/12\.4k/i);
+  });
+
+  it("omits context usage when contextTokens is 0", () => {
+    render(<CardContent card={base} contextTokens={0} {...noopCardHandlers} />);
+    expect(screen.queryByTestId("context-usage")).not.toBeInTheDocument();
+  });
+
+  it("renders deep breakdown rows when deepBreakdown provided", () => {
+    render(
+      <CardContent
+        card={base}
+        contextTokens={20300}
+        deepBreakdown={{
+          totalTokens: 20300,
+          contextWindowTokens: 1_000_000,
+          systemPromptTokens: 6800,
+          systemToolsTokens: 7400,
+          mcpToolsTokens: 809,
+          systemToolsDeferredTokens: 12700,
+          customAgentsTokens: 296,
+          memoryFilesTokens: 845,
+          skillsTokens: 2900,
+          messagesTokens: 2100,
+          freeSpaceTokens: 946700,
+          autocompactBufferTokens: 33000,
+        }}
+        {...noopCardHandlers}
+      />,
+    );
+    const panel = screen.getByTestId("context-breakdown");
+    expect(panel).toHaveTextContent(/system prompt/i);
+    expect(panel).toHaveTextContent(/6\.8k/);
+    expect(panel).toHaveTextContent(/system tools/i);
+    expect(panel).toHaveTextContent(/7\.4k/);
+    expect(panel).toHaveTextContent(/mcp tools/i);
+    expect(panel).toHaveTextContent(/809/);
+    expect(panel).toHaveTextContent(/custom agents/i);
+    expect(panel).toHaveTextContent(/296/);
+    expect(panel).toHaveTextContent(/memory files/i);
+    expect(panel).toHaveTextContent(/845/);
+    expect(panel).toHaveTextContent(/skills/i);
+    expect(panel).toHaveTextContent(/2\.9k/);
+  });
+
+  it("renders breakdown diagram inline below the context bar", () => {
+    render(
+      <CardContent
+        card={base}
+        contextTokens={85000}
+        contextBreakdown={{
+          baseline: 80700,
+          conversation: 3000,
+          cacheRead: 0,
+          output: 700,
+          turnCount: 2,
+        }}
+        {...noopCardHandlers}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /context breakdown/i }),
+    ).not.toBeInTheDocument();
+    const panel = screen.getByTestId("context-breakdown");
+    expect(panel).toHaveTextContent(/system.*tools.*skills/i);
+    expect(panel).toHaveTextContent(/80\.7k/);
+    expect(panel).toHaveTextContent(/conversation/i);
+    expect(panel).toHaveTextContent(/3\.0k/);
+    expect(panel).toHaveTextContent(/output/i);
+    expect(panel).toHaveTextContent(/700/);
+    expect(panel).toHaveTextContent(/2 turns/i);
+    const segments = screen.getAllByTestId("context-segment");
+    expect(segments.length).toBeGreaterThanOrEqual(3);
+  });
 });

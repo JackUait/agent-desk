@@ -523,8 +523,8 @@ func TestEventBridge_EmitsToolResult(t *testing.T) {
 func TestEventBridge_EmitsTurnEnd_WithMetrics(t *testing.T) {
 	_, frames := collectBridgeFrames(t, []agent.StreamEvent{
 		{Type: agent.EventMessageStart, SessionID: "s"},
-		{Type: agent.EventMessageDelta, StopReason: "end_turn", InputTokens: 6, OutputTokens: 10},
-		{Type: agent.EventMessageStop, Text: "done", DurationMS: 3245, CostUSD: 0.18, InputTokens: 6, OutputTokens: 10},
+		{Type: agent.EventMessageDelta, StopReason: "end_turn", InputTokens: 6, OutputTokens: 10, CacheReadTokens: 4, CacheCreationTokens: 2},
+		{Type: agent.EventMessageStop, Text: "done", DurationMS: 3245, CostUSD: 0.18, InputTokens: 6, OutputTokens: 10, CacheReadTokens: 4, CacheCreationTokens: 2},
 	})
 	got := frameTypes(frames)
 	want := []string{"turn_start", "turn_end"}
@@ -546,6 +546,12 @@ func TestEventBridge_EmitsTurnEnd_WithMetrics(t *testing.T) {
 	}
 	if te["stopReason"] != "end_turn" {
 		t.Fatalf("stopReason mismatch: %v", te["stopReason"])
+	}
+	if te["cacheReadTokens"].(float64) != 4 {
+		t.Fatalf("cacheReadTokens mismatch: %v", te["cacheReadTokens"])
+	}
+	if te["cacheCreationTokens"].(float64) != 2 {
+		t.Fatalf("cacheCreationTokens mismatch: %v", te["cacheCreationTokens"])
 	}
 }
 

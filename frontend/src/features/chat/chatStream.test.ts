@@ -143,6 +143,8 @@ describe("chatStreamReducer", () => {
         costUsd: 0.01,
         inputTokens: 3,
         outputTokens: 5,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
         stopReason: "end_turn",
       },
     });
@@ -411,6 +413,8 @@ describe("chatStreamReducer", () => {
             costUsd: 0.01,
             inputTokens: 5,
             outputTokens: 7,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
             stopReason: "end_turn",
           },
           blocks: [
