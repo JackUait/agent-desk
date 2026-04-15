@@ -1,5 +1,7 @@
 package card
 
+import "github.com/jackuait/agent-desk/backend/internal/attachment"
+
 type Column string
 
 const (
@@ -36,4 +38,5 @@ type Card struct {
 	PRUrl              string    `json:"prUrl"`
 	CreatedAt          int64     `json:"createdAt"`
 	UpdatedAt          int64     `json:"updatedAt"`
+	Attachments        []attachment.Attachment `json:"attachments"`
 }

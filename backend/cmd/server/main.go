@@ -54,9 +54,6 @@ func main() {
 	projectHandler := project.NewHandler(projectStore, picker, cascade)
 	projectHandler.RegisterRoutes(mux)
 
-	cardHandler := card.NewHandler(cardSvc, agentMgr, worktreeMgr, projectStore)
-	cardHandler.RegisterRoutes(mux)
-
 	boardHandler := board.NewHandler(cardStore)
 	boardHandler.RegisterRoutes(mux)
 
@@ -73,6 +70,9 @@ func main() {
 	attSvc := attachment.NewService(attStore, func() int64 { return time.Now().Unix() })
 	attHandler := attachment.NewHandlerWithRecorder(attSvc, cardSvc)
 	attHandler.RegisterRoutes(mux)
+
+	cardHandler := card.NewHandlerWithAttachments(cardSvc, agentMgr, worktreeMgr, projectStore, attSvc)
+	cardHandler.RegisterRoutes(mux)
 
 	wsHub := ws.NewHub()
 

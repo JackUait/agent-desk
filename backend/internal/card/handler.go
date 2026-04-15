@@ -6,20 +6,46 @@ import (
 	"net/http"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 	"github.com/jackuait/agent-desk/backend/pkg/httputil"
 )
+
+// AttachmentLister is the minimal interface card.Handler needs to enrich
+// card responses with the current on-disk attachment manifest.
+type AttachmentLister interface {
+	List(cardID string) ([]attachment.Attachment, error)
+}
 
 type Handler struct {
 	svc          *Service
 	agentMgr     *agent.Manager
 	worktreeMgr  *worktree.Manager
 	projectStore *project.Store
+	attachments  AttachmentLister
 }
 
 func NewHandler(svc *Service, agentMgr *agent.Manager, worktreeMgr *worktree.Manager, projectStore *project.Store) *Handler {
 	return &Handler{svc: svc, agentMgr: agentMgr, worktreeMgr: worktreeMgr, projectStore: projectStore}
+}
+
+func NewHandlerWithAttachments(svc *Service, agentMgr *agent.Manager, worktreeMgr *worktree.Manager, projectStore *project.Store, lister AttachmentLister) *Handler {
+	return &Handler{svc: svc, agentMgr: agentMgr, worktreeMgr: worktreeMgr, projectStore: projectStore, attachments: lister}
+}
+
+func (h *Handler) enrich(c *Card) {
+	if h.attachments == nil {
+		if c.Attachments == nil {
+			c.Attachments = []attachment.Attachment{}
+		}
+		return
+	}
+	list, err := h.attachments.List(c.ID)
+	if err != nil || list == nil {
+		list = []attachment.Attachment{}
+	}
+	c.Attachments = list
 }
 
 func (h *Handler) CreateCard(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +72,9 @@ func (h *Handler) ListCards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cards := h.svc.ListCards(projectID)
+	for i := range cards {
+		h.enrich(&cards[i])
+	}
 	httputil.JSON(w, http.StatusOK, cards)
 }
 
@@ -56,6 +85,7 @@ func (h *Handler) GetCard(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
+	h.enrich(&c)
 	httputil.JSON(w, http.StatusOK, c)
 }
 

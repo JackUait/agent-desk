@@ -8,11 +8,21 @@ import (
 	"testing"
 
 	"github.com/jackuait/agent-desk/backend/internal/agent"
+	"github.com/jackuait/agent-desk/backend/internal/attachment"
 	"github.com/jackuait/agent-desk/backend/internal/card"
 	"github.com/jackuait/agent-desk/backend/internal/domain"
 	"github.com/jackuait/agent-desk/backend/internal/project"
 	"github.com/jackuait/agent-desk/backend/internal/worktree"
 )
+
+// fakeAttachmentLister is a stub AttachmentLister for handler tests.
+type fakeAttachmentLister struct {
+	byCard map[string][]attachment.Attachment
+}
+
+func (f *fakeAttachmentLister) List(cardID string) ([]attachment.Attachment, error) {
+	return f.byCard[cardID], nil
+}
 
 // noopGit satisfies project.Git without touching the filesystem.
 type noopGit struct{}
@@ -179,6 +189,81 @@ func TestGetCard(t *testing.T) {
 	json.NewDecoder(rec2.Body).Decode(&got)
 	if got.ID != created.ID {
 		t.Errorf("expected ID %q, got %q", created.ID, got.ID)
+	}
+}
+
+func TestGetCard_EnrichesAttachments(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	lister := &fakeAttachmentLister{byCard: map[string][]attachment.Attachment{}}
+	agentMgr := agent.NewManager("echo")
+	worktreeMgr := worktree.NewManager()
+	projStore := project.NewStore(noopGit{})
+	h := card.NewHandlerWithAttachments(svc, agentMgr, worktreeMgr, projStore, lister)
+
+	c := svc.CreateCard("proj-x", "has files")
+	lister.byCard[c.ID] = []attachment.Attachment{
+		{Name: "a.txt", Size: 4, MIMEType: "text/plain", UploadedAt: 1},
+		{Name: "b.png", Size: 9, MIMEType: "image/png", UploadedAt: 2},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cards/"+c.ID, nil)
+	req.SetPathValue("id", c.ID)
+	rec := httptest.NewRecorder()
+	h.GetCard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var got card.Card
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Attachments) != 2 {
+		t.Fatalf("expected 2 attachments, got %d", len(got.Attachments))
+	}
+	if got.Attachments[0].Name != "a.txt" || got.Attachments[1].Name != "b.png" {
+		t.Errorf("unexpected attachment names: %+v", got.Attachments)
+	}
+}
+
+func TestListCards_EnrichesAttachments(t *testing.T) {
+	store := card.NewStore()
+	svc := card.NewService(store)
+	lister := &fakeAttachmentLister{byCard: map[string][]attachment.Attachment{}}
+	agentMgr := agent.NewManager("echo")
+	worktreeMgr := worktree.NewManager()
+	projStore := project.NewStore(noopGit{})
+	h := card.NewHandlerWithAttachments(svc, agentMgr, worktreeMgr, projStore, lister)
+
+	c1 := svc.CreateCard("proj-y", "c1")
+	c2 := svc.CreateCard("proj-y", "c2")
+	lister.byCard[c1.ID] = []attachment.Attachment{{Name: "x.pdf", Size: 1, MIMEType: "application/pdf", UploadedAt: 1}}
+	lister.byCard[c2.ID] = []attachment.Attachment{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cards?projectId=proj-y", nil)
+	rec := httptest.NewRecorder()
+	h.ListCards(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var got []card.Card
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 cards, got %d", len(got))
+	}
+	byID := map[string]card.Card{}
+	for _, c := range got {
+		byID[c.ID] = c
+	}
+	if len(byID[c1.ID].Attachments) != 1 || byID[c1.ID].Attachments[0].Name != "x.pdf" {
+		t.Errorf("c1 expected 1 attachment x.pdf, got %+v", byID[c1.ID].Attachments)
+	}
+	if len(byID[c2.ID].Attachments) != 0 {
+		t.Errorf("c2 expected 0 attachments, got %+v", byID[c2.ID].Attachments)
 	}
 }
 
