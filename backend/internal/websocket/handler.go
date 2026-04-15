@@ -33,25 +33,38 @@ type attachmentLookup func(cardID, name string) (agent.AttachmentInfo, bool)
 // lookup resolves added filenames to size + mime for the wrapper; pass nil
 // to emit a flag-only note.
 func buildAgentMessage(svc *card.Service, cardID, message string, lookup attachmentLookup) string {
+	c, err := svc.GetCard(cardID)
+	needsStory := err == nil && strings.TrimSpace(c.Description) == ""
+
 	flags, diffAny := svc.DrainDirty(cardID)
+	var body string
 	if len(flags) == 0 {
-		return message
-	}
-	var added []agent.AttachmentInfo
-	var removed []string
-	if d, ok := diffAny.(card.AttachmentDiff); ok {
-		removed = d.Removed
-		for _, name := range d.Added {
-			if lookup != nil {
-				if info, found := lookup(cardID, name); found {
-					added = append(added, info)
-					continue
+		body = message
+	} else {
+		var added []agent.AttachmentInfo
+		var removed []string
+		if d, ok := diffAny.(card.AttachmentDiff); ok {
+			removed = d.Removed
+			for _, name := range d.Added {
+				if lookup != nil {
+					if info, found := lookup(cardID, name); found {
+						added = append(added, info)
+						continue
+					}
 				}
+				added = append(added, agent.AttachmentInfo{Name: name})
 			}
-			added = append(added, agent.AttachmentInfo{Name: name})
 		}
+		body = agent.WrapUserMessage(message, flags, added, removed)
 	}
-	return agent.WrapUserMessage(message, flags, added, removed)
+
+	if needsStory {
+		return "<card-story-missing>\n" +
+			"The card description is empty. Use mcp__agent_desk__set_title and mcp__agent_desk__set_description to capture the task as a human-readable user story before doing anything else.\n" +
+			"</card-story-missing>\n\n" +
+			body
+	}
+	return body
 }
 
 // Handler wires WebSocket connections to the Hub and Agent Manager.

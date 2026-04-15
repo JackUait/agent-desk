@@ -1,6 +1,7 @@
 package websocket_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -111,15 +112,18 @@ func argvContainsEffort(argv []string, level string) bool {
 	return false
 }
 
-// waitForSpyArgv polls until the spy binary has recorded at least one
-// invocation or the deadline elapses.
+// waitForSpyArgv polls until the spy binary has finished writing at least
+// one full invocation (terminated by "---\n") or the deadline elapses. The
+// terminator is the spy's last write, so its presence guarantees all prior
+// argv bytes are visible — protects against partial-append races when the
+// total argv size exceeds the page-cache write granularity.
 func waitForSpyArgv(t *testing.T, path string, timeout time.Duration) [][]string {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		inv := readSpyArgv(t, path)
-		if len(inv) > 0 {
-			return inv
+		raw, err := os.ReadFile(path)
+		if err == nil && bytes.Contains(raw, []byte("---\n")) {
+			return readSpyArgv(t, path)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -1125,8 +1129,10 @@ func TestEventBridge_SkipsEmptyAssistantTextDelta(t *testing.T) {
 //     handler's cleanup goroutine removes it.
 func mcpSpyClaudeBin(t *testing.T, argvFile, mcpCopyFile string) string {
 	t.Helper()
+	// cp the temp config BEFORE writing argvFile — the test polls argvFile
+	// as the completion sentinel, so cp must finish first to avoid a race
+	// where the test reads mcpCopyFile before the spy has copied it.
 	script := fmt.Sprintf(`#!/bin/sh
-{ printf '%%s\n' "$@"; printf -- '---\n'; } >> %q
 seen=0
 for a in "$@"; do
   if [ $seen = 1 ]; then
@@ -1138,8 +1144,9 @@ for a in "$@"; do
     seen=1
   fi
 done
+{ printf '%%s\n' "$@"; printf -- '---\n'; } >> %q
 exit 0
-`, argvFile, mcpCopyFile)
+`, mcpCopyFile, argvFile)
 	path := filepath.Join(t.TempDir(), "spy-claude-mcp.sh")
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("mcpSpyClaudeBin write: %v", err)
